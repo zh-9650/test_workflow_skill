@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-result-review"
+  short_description: "最终执行对账与测试报告"

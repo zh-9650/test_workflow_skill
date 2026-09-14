@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-execution-runtime"
+  short_description: "按 Batch 执行、证据与独立复核"

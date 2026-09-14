@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-data-readiness"
+  short_description: "当前 Batch 前置数据准备"

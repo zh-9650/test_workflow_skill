@@ -1,0 +1,3 @@
+interface:
+  display_name: "clarify-before-testing"
+  short_description: "测试流程路由与轻量状态管理"

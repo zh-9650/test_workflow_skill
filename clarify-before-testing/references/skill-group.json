@@ -1,0 +1,22 @@
+{
+  "skills": [
+    "clarify-before-testing",
+    "test-business-modeling",
+    "test-case-design",
+    "test-execution-planning",
+    "test-data-readiness",
+    "test-execution-runtime",
+    "test-defect-handling",
+    "test-result-review"
+  ],
+  "stages": [
+    "business-modeling",
+    "case-design",
+    "execution-planning",
+    "data-readiness",
+    "execution-runtime",
+    "defect-handling",
+    "result-review",
+    "closed"
+  ]
+}

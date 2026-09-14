@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-defect-handling"
+  short_description: "缺陷提单与修复回归闭环"

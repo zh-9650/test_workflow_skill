@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-execution-planning"
+  short_description: "执行方式、Batch、依赖与证据规划"
