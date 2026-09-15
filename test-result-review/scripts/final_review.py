@@ -45,6 +45,10 @@ def validate(v,run_dir=None):
     state_path=run/'internal/state/run-status.json'
     if not state_path.exists(): fail('run_status','run-status.json missing')
     run_state=json.loads(state_path.read_text(encoding='utf-8'))
+    if run_state.get('pending_resume_batches'):
+        fail('run_status.pending_resume_batches','Cases unblocked by regression still require data recheck, execution and Reviewer closure')
+    if run_state.get('pending_resume'):
+        fail('run_status.pending_resume','a regression-unblocked Batch resume is still active')
     plan_binding=run_state.get('confirmation_bindings',{}).get('execution-plan')
     if not plan_binding: fail('execution_plan_ref','execution plan is not confirmed/bound')
     if Path(plan_binding.get('contract_path','')).resolve()!=plan_path.resolve() or _sha256(plan_path)!=plan_binding.get('contract_sha256'):

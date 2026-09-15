@@ -44,6 +44,7 @@ execution-planning
    → execution-runtime (执行当前 Batch)
    → Reviewer 审核
    → [存在未处理 FAIL] → defect-handling (提单/关联/修复/回归闭环)
+   → [回归解锁 BLOCKED Case] → data-readiness (重新验证该 Batch 数据) → execution-runtime (只恢复被解锁 Case) → Reviewer
    → [存在后续待执行批次] → 正常进入 data-readiness (准备下一 Batch 数据，无需 return_reason)
 + 全部批次与缺陷闭环：
  → result-review
@@ -96,3 +97,5 @@ set final_review_status=passed
 - 用户暂停。
 
 不要对每次点击、请求或截图更新全局状态。
+
+Stage 只能由 Router transition 更新。Dashboard、Runtime 和 Defect 事件可以更新 Case/Batch/Bug 事实，但不能借事件字段改变 `current_stage`。

@@ -237,12 +237,13 @@ final_review_status=passed
 - 下载文件；
 - 最终报告；
 - Dashboard 最终状态。
+- `pending_resume_batches` 与 `pending_resume` 均为空；回归解锁的 BLOCKED Case 已重新执行并经 Reviewer 确认。
 
 详细：
 
 `references/result-review-model.md`
 
-# 13. Final Review 必须重开真实执行资料
+# 14. Final Review 必须重开真实执行资料
 
 Final Review 不相信最终摘要里的 `PASS` 字样。
 

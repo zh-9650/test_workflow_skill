@@ -436,6 +436,20 @@ internal/execution/results/case-results-ledger.json
 
 主 Agent 不手工拼临时 `global-results`。
 
+完成一个 Batch 后，Runtime 不直接启动下一个 Batch。若 Router 的 `next_action` 为 `prepare_batch_data(Bxx)`，必须返回 `data-readiness`，待该 Batch 的 Manifest 校验并绑定后再执行。
+
+Bug 回归通过而解锁旧 BLOCKED Case 时，先完成 Router 指定 Batch 的数据重检与绑定，再准备恢复任务：
+
+```bash
+python test-execution-runtime/scripts/runtime_orchestrator.py resume-blocked-prepare \
+  --run-dir <run> \
+  --batch B02 \
+  --cases C07,C08 \
+  --bug-ref BUG-123
+```
+
+该命令只接受 Router 批准的 Case 集合，并验证它们确实已有 Reviewer 确认的 BLOCKED 历史、依赖已变为 PASS/PASS_AFTER_FIX、当前 Batch 数据仍有效。之后使用 `retest-case-start / retest-case-finish / retest-self-review / retest-reviewer` 完成恢复；不能直接改 Dashboard 或 Ledger。
+
 ---
 
 # 17. Dashboard
@@ -480,7 +494,7 @@ Batch 内仍由同一个 Worker 串行执行，不因此变成“一 Case 一个
 
 不做步骤级恢复，不假设最后一个动作已成功。
 
-# 18. Evidence 与 Dashboard 的工程约束
+# 19. Evidence 与 Dashboard 的工程约束
 
 Case Result 中写一个 Evidence 路径不代表证据存在。
 

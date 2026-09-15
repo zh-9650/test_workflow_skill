@@ -242,7 +242,7 @@ internal/data/manifests/Bxx-data-manifest.json
 
 `references/data-builder-method.md`
 
-# 11. Data Manifest 与当前 Batch 强绑定
+# 10. Data Manifest 与当前 Batch 强绑定
 
 Data Manifest 不能脱离 Execution Plan 单独宣布 ready。
 
@@ -253,6 +253,17 @@ python test-data-readiness/scripts/data_manifest.py \
   --input <run>/internal/data/manifests/B01-data-manifest.json \
   --plan <run>/internal/execution/execution-plan.json
 ```
+
+独立校验成功还不等于 Runtime 已获准使用。必须由 Router 在 `data-readiness` 阶段把当前文件和当前已确认 Execution Plan 的摘要绑定到 Run：
+
+```bash
+python clarify-before-testing/scripts/workflow_state.py set-batch-data-ready \
+  --state <run>/internal/state/run-status.json \
+  --batch B01 \
+  --manifest <run>/internal/data/manifests/B01-data-manifest.json
+```
+
+禁止用 `set-flag current_batch_data_ready=true` 或手改 JSON 绕过校验。每个新 Batch、以及回归后准备恢复 BLOCKED Case 的 Batch，都必须重新执行这一步。
 
 必须保证：
 

@@ -39,6 +39,8 @@
 - 无依赖部分继续；
 - next_action 指向真正可执行的下一个动作。
 
+Bug 回归通过后，只把与该 Bug 绑定的 BLOCKED Case 放入按 Batch 排序的恢复队列。每个恢复 Batch 必须先重新执行 Data Manifest 校验和 Router 绑定，再生成只包含被解锁 Case 的恢复任务；恢复结果仍需 Worker 自审和独立 Reviewer。队列未清空时不能进入 Final Review。
+
 ## 用户暂停
 
 记录：

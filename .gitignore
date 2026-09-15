@@ -1,5 +1,0 @@
-*.zip
-__pycache__/
-*.py[cod]
-*.class
-.pytest_cache/

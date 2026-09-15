@@ -20,6 +20,7 @@
 → Worker 自审
 → 独立 Reviewer
 → 缺陷 / 回归
+→ 被回归解锁的 BLOCKED Case 重新校验本 Batch 数据并恢复执行
 → 最终结果复核
 ```
 
@@ -46,6 +47,9 @@
 - 技术执行错误不等于产品 FAIL。
 - 局部补测只更新受影响 Case，不覆盖整个 Batch 已完成的审查事实。
 - `FAIL → Bug → Regression → PASS_AFTER_FIX` 的历史由事实账本产生，Regression 不能伪造初始 FAIL。
+- 每个 Batch 都单独经过数据校验与绑定；完成 B1 不会让 B2 自动获得执行资格。
+- 回归只解除真实依赖，原 BLOCKED Case 仍需重新校验数据、正式执行、自审和 Reviewer，不能直接改成 PASS。
+- 阶段只能由 Router 改变；Runtime、Dashboard 和缺陷事件只能同步事实，不能自行跳阶段。
 - Run Status、Case Ledger、Dashboard 和 Final Review 使用同一执行事实，不各自维护互相矛盾的结果。
 - 不依赖 Hook / Lease / Heartbeat / 复杂 Resume Pack。
 

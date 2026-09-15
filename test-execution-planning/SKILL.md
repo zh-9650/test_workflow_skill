@@ -339,7 +339,7 @@ internal/execution/execution-plan.json
 
 `references/execution-planning-method.md`
 
-# 14. Planning 的来源绑定
+# 13. Planning 的来源绑定
 
 `internal/execution/execution-plan.json` 必须绑定已经人工确认的正式 Case 集合，而不是由 Planning 自己声明“全部已分配”。
 

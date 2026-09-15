@@ -191,6 +191,8 @@ def _finish_resume_batch(s,batch_id):
     queue=s.get('pending_resume_batches',[])
     if any(x.get('batch_id')==batch_id for x in queue):
         s['pending_resume_batches']=[x for x in queue if x.get('batch_id')!=batch_id]
+        if isinstance(s.get('pending_resume'),dict) and s['pending_resume'].get('batch_id')==batch_id:
+            s['pending_resume']=None
         return True
     return False
 
@@ -230,14 +232,12 @@ def apply_event_files(run_status_path,dashboard_path,event):
     if not d: raise AssertionError('dashboard-data.json must be initialized from execution plan before runtime events')
     event=dict(event); typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
     state_stage=s.get('current_stage','execution-runtime')
-    target_stage=event.get('stage')
-    if not target_stage:
-        if typ in {'bug_submitted','bug_fixed_pending_regression'}:
-            target_stage='defect-handling'
-        elif state_stage=='defect-handling':
-            target_stage='defect-handling'
-        else:
-            target_stage=state_stage
+    event_stage=event.get('stage')
+    if event_stage and event_stage!=state_stage:
+        raise AssertionError(f'dashboard event cannot change Router stage {state_stage} -> {event_stage}')
+    if typ in {'bug_submitted','bug_fixed_pending_regression','regression_finished'} and state_stage!='defect-handling':
+        raise AssertionError(f'{typ} requires Router stage defect-handling, current stage is {state_stage}')
+    target_stage=state_stage
     d['current_stage']=target_stage
     if typ=='regression_finished' and event.get('status')=='PASS':
         ref=event.get('bug_ref')
@@ -287,11 +287,12 @@ def apply_event_files(run_status_path,dashboard_path,event):
             elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
             else: s['next_action']={'type':'result_review'}
     elif typ=='review_finished' and event.get('status')=='passed':
+        resumed_batch=_finish_resume_batch(s,bid)
         if unhandled_fails or event.get('unhandled_fail_case_ids'):
             fail_cids=event.get('unhandled_fail_case_ids') or [c['id'] for c in unhandled_fails if c.get('batch_id')==bid] or [c['id'] for c in unhandled_fails]
             fail_bid=bid or (unhandled_fails[0].get('batch_id') if unhandled_fails else None)
             s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
-        elif _finish_resume_batch(s,bid):
+        elif resumed_batch:
             resume=_resume_action(s)
             if resume: s['next_action']=resume
             else:

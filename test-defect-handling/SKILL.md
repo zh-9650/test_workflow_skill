@@ -237,3 +237,5 @@ Regression 仍必须：
 - 保留原主执行方式；
 - 完整覆盖原失败 Case + 已确定影响范围；
 - 整个 Regression Task 全部 PASS 后才允许写入 `PASS_AFTER_FIX` / PASS。
+
+Regression PASS 只更新本次 Regression Task 中实际执行且通过的原失败/影响 Case。因 Bug 而 BLOCKED、但未包含在 Regression Task 中的下游 Case，只能解除阻塞并进入恢复队列；Router 随后按 Batch 路由到 `data-readiness`，Runtime 重新执行并复核这些 Case。禁止把“依赖已修复”直接等同于“下游 Case 已通过”。

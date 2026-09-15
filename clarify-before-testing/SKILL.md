@@ -266,6 +266,19 @@ Run
      type: result_review
    ```
 
+4. **回归解锁不等于下游通过**：
+   Regression PASS 后，原 FAIL 可进入 `PASS_AFTER_FIX`；因该缺陷而 BLOCKED 的 Case 只能进入待恢复队列。Router 必须按 Batch 给出：
+   ```yaml
+   next_action:
+     type: prepare_resumed_cases_data
+     batch_id: B2
+     case_ids: [C07, C08]
+     bug_ref: BUG-123
+   ```
+   这些 Case 重新通过 `data-readiness → execution-runtime → Worker 自审 → Reviewer` 后才算闭环。不能在回归事件中直接把它们改为 PASS。
+
+`current_stage` 只由 Router 的显式 transition 改变。Dashboard/Runtime/Defect 事件若声明了不同 Stage，必须拒绝，不能反向覆盖 Run Status。
+
 ---
 
 # 9. Defect 不冻结整个 Run
