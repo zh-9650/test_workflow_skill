@@ -1,25 +1,239 @@
 ---
 name: test-defect-handling
-description: 对 Reviewer 已确认的真实产品问题做重复检查、缺陷提交、Case/Batch 关联与独立回归，并保留 FAIL→Bug→Regression→最终结果完整历史。
+description: Turn reviewer-confirmed product issues from Runtime into high-quality defects and close the fix/regression loop. 仅在 Runtime 已排除明显脚本、Locator、数据和环境问题且独立 Reviewer 确认疑似产品问题后使用。负责稳定复现、最小合法路径、重复 Bug 检查、同根因聚合、Bug 自审/提交、关联 Case/Batch、修复后的新 Regression Worker 及必要影响范围回归。
 ---
-# Test Defect Handling
 
-## 1. 入口
-只有 Runtime 已排除脚本/Locator/数据/明显环境问题，且 Reviewer 确认产品问题后才能正式进入。
+# Test Defect Handling｜缺陷与回归
 
-## 2. Defect Contract
-必须有来源 Case/Batch、`reviewer_confirmed=true`、重复检查、根因分组、完整 payload、自审和 submission。
+定位：
 
-- 新 Bug：只有 `submission.status=submitted` 且拿到真实 `bug_ref` 才算完成。
-- 已有 Bug：必须 `duplicate_check.result=existing + existing_bug_ref`，submission 使用 `not_submitted_existing`，并关联原 Bug；不能伪装成“提交失败”，也不能重复新建。
+> **把确认的产品问题变成高质量缺陷，并在开发修复后完成可信回归。**
 
-## 3. Regression
-Regression Task 使用新的 Worker，并携带原始计划快照 `baseline_cases`；必须保持原 `primary_execution`、Expected ID 及 Expected 文本映射，至少包含原失败 Case 和受影响 Case。每个 Regression Result 直接复用 Runtime 的 `execution_control.validate()`：执行方式、Expected、Actual、Evidence、Status 与正式执行完全同一标准。
+Runtime 技术错误不进入本 Skill。
 
-因此 `worker_is_new=true`、`preserve_primary_execution=true` 只是必要元数据，不能代替真实结果。Regression 是否通过必须同时检查原失败 Case 和全部 `impact_case_ids`；任一影响范围 Case 未 PASS，整个 Regression 都不能判通过。只有完整回归范围全部 PASS 后，原失败 Case 才有资格形成 PASS_AFTER_FIX。
+---
 
-## 4. 状态联动
-Bug 提交、等待修复、回归完成通过统一事件更新器同步到 `run-status.json` 和 Dashboard。完整 Regression PASS 后，同时回写 Runtime 的全局 Case 结果账本：原失败 Case=`PASS_AFTER_FIX`，影响范围 Case=`PASS`；之后跨 Batch dependency 自动使用新状态恢复受影响业务链。
+# 1. 入口
 
-## 5. 历史
-最终 PASS_AFTER_FIX 必须可追溯：initial FAIL → bug_ref → regression record(PASS) → final PASS_AFTER_FIX。详细规则见 `references/defect-regression-method.md`。
+Runtime 已完成：
+
+- 按真实主执行方式执行；
+- 排除明显脚本/Locator；
+- 排除数据问题；
+- 排除明显环境问题；
+- 复现关键异常；
+- Reviewer 确认疑似产品问题。
+
+然后才进入 Defect Handling。
+
+---
+
+# 2. 完整缺陷流程
+
+```text
+确认产品问题
+↓
+稳定复现
+↓
+提炼最小合法复现路径
+↓
+整理 Evidence
+↓
+检查是否已有 Bug
+↓
+判断多个 Case 是否同根因
+↓
+生成 Bug
+↓
+AI 自审
+↓
+提交禅道
+↓
+Bug ↔ Case ↔ Batch
+↓
+判断真正被阻塞的 Case
+↓
+无影响测试继续
+↓
+开发修复
+↓
+生成 Regression Task
+↓
+新的 Regression Worker
+↓
+原问题回归
+↓
+必要影响范围回归
+↓
+更新 Bug / Case / 全局结果账本
+```
+
+---
+
+# 3. 最小合法复现
+
+“最小”不是绕过业务前提。
+
+保留所有真正业务必须条件，去掉无关步骤。
+
+例如 Bug 出现在“已审核项目编辑限制”：
+
+可以用 API 合法创建/提交/审核作为前置；
+
+但不能直接改数据库 status 绕过状态机。
+
+---
+
+# 4. Duplicate Bug
+
+正式提单前检查现有 Bug。
+
+如果已经存在同根因 Bug：
+
+- 不重复提；
+- 关联现有 Bug；
+- 关联本次 Case/Batch/Evidence。
+
+状态应清楚表达“已有 Bug，未重复提交”，不要把它记成“提交失败”。
+
+---
+
+# 5. 同根因聚合
+
+多个 Case 同根因：
+
+```text
+一个 Bug
+→ 关联多个 Case
+```
+
+表现相似但根因不同：拆 Bug。
+
+不要为了减少 Bug 数量强行合并。
+
+---
+
+# 6. Bug 内容
+
+至少：
+
+- 标题；
+- 项目；
+- 模块；
+- 开发负责人；
+- 严重程度/优先级；
+- 环境；
+- 前置条件；
+- 复现步骤；
+- Actual；
+- Expected；
+- 复现率；
+- 关联 Case；
+- Evidence。
+
+---
+
+# 7. Bug 自审
+
+提交前检查：
+
+- 真的是产品问题吗；
+- Expected 有业务依据吗；
+- 复现稳定吗；
+- 最小路径是否合法；
+- 是否已有 Bug；
+- 是否同根因；
+- 模块/开发是否正确；
+- Evidence 是否足够；
+- 是否泄露敏感信息；
+- 严重程度是否合理。
+
+---
+
+# 8. Bug 只阻塞真实依赖范围
+
+Bug 导致某条关键 Case FAIL：
+
+- 依赖它的 Case 可 BLOCKED；
+- 无依赖的其他 Batch 继续。
+
+不要一个 Bug 把整个 Run 暂停。
+
+---
+
+# 9. 回归必须用新的 Worker
+
+开发修复后：
+
+```text
+主 Agent
+→ Regression Task
+→ 新 Regression Worker
+```
+
+不要复用之前执行失败时已经很长的 Worker 上下文。
+
+---
+
+# 10. 回归范围
+
+至少：
+
+1. 原失败 Case；
+2. 同业务相关场景；
+3. 根据修复影响选择必要上下游 Case。
+
+回归必须从原 Execution Planning 读取主执行方式并保持一致。
+
+原 UI Case 不能为了方便回归成 API；不能靠 `preserve_primary_execution=true` 之类自报字段证明没有偷换。
+
+---
+
+# 11. 回归判定
+
+Regression Task 中的**所有 Case**都必须通过，整次回归才算通过。
+
+不允许：
+
+```text
+原失败 Case PASS
+影响范围 Case FAIL
+→ regression_passed=true
+```
+
+如果原问题修复但影响回归失败：
+
+- 原问题可记录“现象已修”；
+- 整次 regression 仍失败；
+- 新失败按根因判断是否产生新 Bug；
+- 不关闭完整回归闭环。
+
+---
+
+# 12. 历史必须保留
+
+例如：
+
+```yaml
+initial_result: FAIL
+bug_ref: BUG-123
+regression_1: PASS
+final_result: PASS_AFTER_FIX
+```
+
+不要把初始 FAIL 覆盖掉只剩最终 PASS。`initial_result=FAIL` 必须来自 Runtime 已经 Reviewer 确认的真实历史；Regression 不能自己补写一个从未发生过的 FAIL，也不能把原 PASS 直接改成 `PASS_AFTER_FIX`。
+
+详细：
+
+`references/defect-regression-method.md`
+
+# 13. Defect / Regression 状态同步
+
+正式 Bug / Regression 通过 `defect_contract.py --apply-run-dir <RUN>` 落账时，同时更新全局 Case Result Ledger 和 Dashboard。
+
+Regression 仍必须：
+
+- 使用新的 Regression Worker；
+- 保留原主执行方式；
+- 完整覆盖原失败 Case + 已确定影响范围；
+- 整个 Regression Task 全部 PASS 后才允许写入 `PASS_AFTER_FIX` / PASS。

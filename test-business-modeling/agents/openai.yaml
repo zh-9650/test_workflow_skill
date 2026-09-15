@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-business-modeling"
-  short_description: "模块化业务理解与联动梳理"
+  display_name: "业务理解 / Test Business Modeling"
+  short_description: "按模块梳理业务规则、状态、流程、影响、联动与待确认问题"
+  default_prompt: "Use $test-business-modeling for the current Run business-understanding stage. Read current evidence, model the real business by modules and cross-module flows, self-review, then ask for confirmation."

@@ -1,7 +1,54 @@
-# Defect / Regression Method
+# 缺陷与回归方法
 
-正式缺陷来自 Reviewer 已确认的 `product_issue`。提交前完成重复检查；已有 Bug 使用 `not_submitted_existing` 并关联 `existing_bug_ref`，新 Bug 只有拿到真实 `bug_ref` 才算 submitted。
+## 1. 产品问题确认
 
-Regression Task 必须包含真实 `cases`、`original_case_ids`、`impact_case_ids`，使用新 Worker，并保持原 `primary_execution`。Regression Result 直接复用 Runtime `execution_control.validate()`，所以 UI→API 偷换、Expected/Actual/Evidence 缺失都会失败。
+Evidence 应能证明：
 
-PASS_AFTER_FIX 只允许来自：initial FAIL → Bug → Regression Worker → 原 Case Regression PASS → 最终 PASS_AFTER_FIX。
+- 前置合法；
+- 操作真实发生；
+- Expected 有依据；
+- Actual 与 Expected 不一致；
+- 明显执行技术问题已排除。
+
+## 2. Bug 标题
+
+优先写：
+
+```text
+[模块/动作] 条件下，实际异常结果
+```
+
+避免：
+
+> 功能有问题
+
+## 3. 最小复现
+
+删掉与故障无关的导航和准备噪声，但保留业务合法前置。
+
+## 4. 根因聚合
+
+同一服务端规则错误导致多个入口都失败，可以一个 Bug 关联多个 Case。
+
+两个不同校验遗漏即使表现都是“保存失败”，也应拆开。
+
+## 5. 回归影响范围
+
+根据修复内容选择：
+
+- 同一业务规则；
+- 同一状态；
+- 同一共享组件；
+- 上下游；
+- 多入口；
+- 历史易错机制。
+
+不要固定“原 Case + 2 条”。
+
+## 6. 回归失败
+
+任何 Regression Task 内 Case FAIL：
+
+- 整次 regression_passed=false；
+- 分析是原问题仍存在、修复引入新问题、还是独立已有问题；
+- 保留完整结果。

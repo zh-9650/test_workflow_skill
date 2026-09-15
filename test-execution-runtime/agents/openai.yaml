@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-execution-runtime"
-  short_description: "按 Batch 执行、证据与独立复核"
+  display_name: "测试执行 / Test Execution Runtime"
+  short_description: "按已确认计划执行 Batch，逐项验证 Expected 并由 Reviewer 复核"
+  default_prompt: "Use $test-execution-runtime only for a planned and data-ready Batch. Keep the planned primary method, execute cases serially, diagnose technical failures, bind evidence, self-review and independently review."

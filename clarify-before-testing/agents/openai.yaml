@@ -1,3 +1,4 @@
 interface:
-  display_name: "clarify-before-testing"
-  short_description: "测试流程路由与轻量状态管理"
+  display_name: "测试流程路由 / Clarify Before Testing"
+  short_description: "识别当前 Run、阶段、确认状态与下一动作，不承担测试分析"
+  default_prompt: "Use $clarify-before-testing to discover or resume the current testing Run, route to the correct testing stage, bind reviewed/confirmed artifacts, and continue from the real next action."

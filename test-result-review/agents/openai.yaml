@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-result-review"
-  short_description: "最终执行对账与测试报告"
+  display_name: "测试结果复核 / Test Result Review"
+  short_description: "对账整个 Run 的 Case、Bug、Blocked、回归与最终质量结论"
+  default_prompt: "Use $test-result-review after execution stabilizes. Reconcile formal/planned/final cases, bugs, blocked scope, evidence, regressions and produce the final report and conclusion."

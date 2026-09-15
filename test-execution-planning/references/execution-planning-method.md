@@ -1,25 +1,69 @@
 # 执行规划方法
 
-执行规划的职责是把所有会影响正式执行的决定前置，并形成可机器校验的 `execution-plan.json`。
+## 1. 目标驱动，不以“哪个更容易自动化”驱动
 
-## Case 级必填
-- `case_id` 与唯一 `batch_id`，Batch 侧 `case_ids` 必须反向包含该 Case。
-- `primary_execution`: `UI | API | 人工`。
-- `supporting_observations`: UI/API/数据库只读/Network/日志/文件/其他系统。
-- `dependencies`: 只能引用真实 Case；禁止自依赖、循环依赖以及“依赖项在更晚 Batch 执行”。
-- `evidence_plan`: 显式包含 `screenshots/recording/api/network/files`。不能用空对象占位。
+Case 测的是前端交互，就算 API 更容易也不能换成 API。
 
-## Evidence 约束
-UI Case 至少规划截图或录屏，确实不需要时必须写 `waiver_reason`。API Case 至少规划 request/response 证据。下载类 Case 必须规划文件证据。录屏使用：
+Case 测的是服务端组合规则，大量 UI 点击没有价值时可以 API 主执行。
 
-```yaml
-recording:
-  required: true
-  scope: batch | case
-```
+## 2. Batch 是业务和数据边界
 
-## Batch
-Batch 按业务链、状态依赖、共享数据、角色、执行方式和破坏性操作划分。`parallel_safe` 必须显式布尔值。默认 UI 与共享状态 Batch 串行。
+好的 Batch 通常满足：
 
-## 完成条件
-`self_review.status=passed` 且 `user_confirmation.status=confirmed` 后，计划才允许进入 Data Readiness。
+- 同一业务目标；
+- 数据生命周期连续；
+- 角色切换可理解；
+- 不需要频繁重建上下文；
+- 证据可以一起组织。
+
+拆分：
+
+- 数据互相污染；
+- 破坏性操作；
+- 权限负向测试；
+- 执行模式差异很大；
+- 可以独立并行。
+
+## 3. 数据需求只规划，不在这里造数
+
+Planning 写清：
+
+- 要什么对象；
+- 目标状态；
+- 是否新建；
+- 是否可以复用基础账号/角色/租户；
+- 对应 Case。
+
+真正创建在 Data Readiness。
+
+## 4. 证据按 Expected 规划
+
+先问：
+
+> 这个 Expected 最可信的观察点是什么？
+
+UI 截图不一定能证明数据库业务事实；API 200 也不一定能证明最终异步成功。
+
+辅助验证只在有价值时使用，不为了“证据多”堆东西。
+
+## 5. 核心业务链
+
+完整业务流程最好：
+
+- 同一 Batch；
+- 一个 Worker；
+- 串行；
+- Batch 级录屏；
+- 关键节点截图；
+- 必要的 API/Network read-back。
+
+## 6. 人工 Case
+
+只有真实外部依赖：扫码、硬件、人工审批、主观视觉。
+
+规划时写清：
+
+- 人需要做什么；
+- Agent 等什么结果；
+- 如何回填 Actual/Evidence；
+- 后续如何继续。

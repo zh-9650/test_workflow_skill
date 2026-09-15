@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-case-design"
-  short_description: "测试点与测试用例设计"
+  display_name: "测试设计 / Test Case Design"
+  short_description: "从已确认业务理解生成并审查测试点与可执行测试用例"
+  default_prompt: "Use $test-case-design after business understanding is confirmed. Derive test points with suitable techniques, review linkage/flows/risks, confirm points, then generate and review executable cases."

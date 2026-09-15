@@ -1,7 +1,53 @@
-# Data Builder Method
+# Data Builder 方法
 
-优先确认真实业务入口：前端调用、API 文档、Controller/DTO/Validator、已有脚本，必要时看 UI Network。先最小试建一条，再 read-back 和核对业务状态，成功后沉淀可复用 Builder。
+## 1. Builder 不是“造一条数据库记录”
 
-Builder 的 `business_entry` 只能是 API/UI；script 只是实现方式。业务对象必须核对存在性、状态、关联关系和 read-back，分别通过 `verified/read_back_verified/relations_verified` 表达。
+Builder 应封装合法业务动作。
 
-Manifest 不允许人工写顶层 `ready=true`。通过 `data_manifest.py --finalize` 由 Contract 计算 `readiness.ready`；Runtime Precheck 仍会重新执行 Contract，避免伪造 readiness。
+例如：
+
+```text
+create_project
+submit_project
+approve_project
+```
+
+目标是让数据形成路径与真实业务一致。
+
+## 2. 最小探测
+
+新接口/新页面第一次用于造数：
+
+- 只创建一个样本；
+- 读取回来；
+- 验证状态/关系；
+- 必要时 UI 看一眼。
+
+确认之后再沉淀。
+
+## 3. Builder 失败怎么处理
+
+每次重试必须有新的证据或新的假设。
+
+禁止固定“失败就重试 3 次”。
+
+先判断：
+
+- 参数错；
+- 鉴权错；
+- 业务前置错；
+- 环境错；
+- API 不适合；
+- 真实产品问题。
+
+## 4. 数据不要污染测试目标
+
+数据准备只能完成前置。
+
+如果 Case 的测试目标就是“提交项目”，数据准备不能提前把项目提交掉。
+
+## 5. 业务对象隔离
+
+默认用 Run/Batch 唯一前缀或可追踪标识，避免历史数据混淆。
+
+但不要为了唯一性改变业务含义。

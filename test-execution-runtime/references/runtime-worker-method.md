@@ -1,11 +1,148 @@
-# Runtime Worker 方法
+# Runtime Worker 方法｜UI/API 实战执行
 
-主 Agent 不直接长时间执行 Case，而是通过 Runtime Orchestrator 管理 Batch：Precheck → 构建 Worker Task → Worker 执行 → Worker 自审 → Reviewer。
+## 1. 每个 Case 开始先定位真实业务对象
 
-Worker Task 必须带 Case 顺序、完整 Case、Execution Context、Data Manifest、Evidence Plan、允许/禁止调整项和输出目录。Worker 可以修 Locator/等待/脚本等实现问题，但不能修改 `primary_execution`、Expected、关键业务步骤或 Batch 范围。
+确认：
 
-Case 结果严格区分：
-- PASS：每个 Expected 有具体 Actual、结果为 pass、Evidence 非空；规划明确豁免时需有豁免原因。
-- FAIL：必须是 `reason_type=product_issue`，有 Expected/Actual/Evidence，且已复现或明确说明复现不适用。
-- BLOCKED：必须是业务/环境/外部资源/上游 Case/人工等待/数据不可用/账号权限之一；脚本或 Locator 错误不能长期 BLOCKED。
-- NEEDS_REVIEW：必须记录待审类型、原因和 `required_action`。
+- 当前账号；
+- 当前页面；
+- 当前业务对象；
+- 唯一标识；
+- 当前状态；
+- 与计划数据是否一致。
+
+不要看到第一条相似记录就操作。
+
+## 2. 表格
+
+```text
+通过业务唯一值定位行
+→ 确认该行关键状态
+→ 在该行范围内找操作
+→ 执行动作
+→ 等待真实更新条件
+→ 重新定位同一业务对象
+→ 验证结果
+```
+
+不要依赖“第 3 行”这种位置。
+
+## 3. 下拉 / Select
+
+```text
+定位字段
+→ 打开
+→ 定位当前可见 overlay
+→ 找目标选项
+→ 选择
+→ 验证字段值
+→ 保存后再验证持久化
+```
+
+避免匹配页面中隐藏旧 overlay。
+
+## 4. 弹窗
+
+先确认弹窗标题和业务对象，再在弹窗范围内操作。
+
+弹窗关闭后重新观察主页面，不继续使用旧引用。
+
+## 5. Tab / 分页
+
+切换以后确认：
+
+- 当前激活 Tab；
+- 当前页码；
+- 数据是否刷新；
+- 业务对象是否仍是目标对象。
+
+## 6. iframe / 新窗口
+
+显式切换上下文。
+
+返回后重新观察当前页面，不依赖切换前节点。
+
+## 7. 保存成功不等于业务成功
+
+Toast “保存成功”只能证明前端收到成功反馈。
+
+如果 Expected 是“列表/详情/下游状态变化”，继续：
+
+- 回列表重新定位；
+- 进详情；
+- 必要时读 API；
+- 必要时 Network；
+- 必要时数据库只读。
+
+## 8. UI Case 的 API 只能辅助
+
+可以：
+
+- 查询对象；
+- read-back；
+- 验证服务端结果；
+- 调试原因。
+
+不能用 API 完成 UI 被测动作。
+
+## 9. Locator 失败
+
+按顺序排：
+
+1. 当前页面对吗；
+2. 页面状态对吗；
+3. 数据对象存在吗；
+4. 元素是否在弹窗/iframe/当前行；
+5. DOM 是否变化；
+6. 文本/role/label 是否可用；
+7. 源码能否找到稳定语义；
+8. 是否只是等待不足。
+
+再改 Locator。
+
+## 10. 操作没有效果
+
+不要立即点击第二次。
+
+检查：
+
+- 第一次是否真的触发；
+- Network 是否发出；
+- 后端是否成功；
+- 页面是否有阻塞提示；
+- 是否异步；
+- 是否状态不允许；
+- 是否点击到错误对象。
+
+重复动作可能本身产生副作用。
+
+## 11. Observe → Diagnose → Act
+
+每次失败后，下一次动作必须带来新的信息。
+
+如果没有新证据，只是原样重试，不算诊断。
+
+## 12. API Case
+
+保存：
+
+- method/url；
+- 脱敏 request；
+- status/body；
+- 与 Expected 对应的 Actual；
+- 必要 read-back。
+
+接口 200 不自动 PASS。
+
+## 13. 异步 Case
+
+区分：
+
+```text
+请求接受
+处理中
+完成/失败
+最终可见结果
+```
+
+Expected 是最终业务结果时必须等最终状态，不只验证“任务创建成功”。

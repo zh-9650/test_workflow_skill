@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-data-readiness"
-  short_description: "当前 Batch 前置数据准备"
+  display_name: "测试数据准备 / Test Data Readiness"
+  short_description: "为当前 Batch 按合法业务路径准备并验证前置数据"
+  default_prompt: "Use $test-data-readiness for the current planned Batch only. Prepare fresh business data through legal API/UI paths, read it back, and verify state/relations/access."

@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-defect-handling"
-  short_description: "缺陷提单与修复回归闭环"
+  display_name: "缺陷与回归 / Test Defect Handling"
+  short_description: "确认缺陷、提单、关联 Case，并用新 Worker 完成影响回归"
+  default_prompt: "Use $test-defect-handling for reviewer-confirmed product issues. Create a minimal legal reproduction, deduplicate and submit the bug, then run original and impact regression with a new worker."

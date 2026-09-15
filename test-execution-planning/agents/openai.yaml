@@ -1,3 +1,4 @@
 interface:
-  display_name: "test-execution-planning"
-  short_description: "执行方式、Batch、依赖与证据规划"
+  display_name: "测试执行规划 / Test Execution Planning"
+  short_description: "确定 UI/API/人工、Batch、依赖、数据与证据策略"
+  default_prompt: "Use $test-execution-planning after test cases are confirmed. Decide primary execution, batches, dependencies, data strategy and evidence before Runtime."

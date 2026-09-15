@@ -1,19 +1,72 @@
-# Result Review Model
+# 最终结果复核模型
 
-逐 Case 对账：planned primary execution vs actual execution；planned evidence vs actual evidence；FAIL 的 Bug 闭环；BLOCKED 原因；PASS_AFTER_FIX 的 FAIL→Bug→Regression 历史。逐 Batch 再核对 Worker Self Review / Reviewer mandatory checks 与 completed 状态。
+## 1. 完整性优先于通过率
 
-`FAIL` 始终代表 unresolved；`fixed=true` 等过程标记不能改变最终判断。真正修复并回归通过必须转成 `PASS_AFTER_FIX` 并带完整回归历史。
+先确认：
 
-内部输出：
+- 正式 Case 是否全进入 Planning；
+- Planning 是否全有最终结果；
+- Batch 是否全部结束；
+- NEEDS_REVIEW 是否清零；
+- Defect / Regression 是否闭环到当前状态。
 
-```yaml
-final_assessment:
-  coverage_complete:
-  core_flow_passed:
-  unresolved_critical_defects:
-  blocked_scope:
-  regression_complete:
-  conclusion: ready | ready_with_risk | not_recommended | incomplete
-```
+完整性不成立时，通过率没有意义。
 
-正式报告只能根据 `final_assessment.conclusion` 映射中文结论。
+## 2. 核心流程单独看
+
+不要让大量简单 API Case 把总比例抬高。
+
+核心流程至少单独展示：
+
+- 完成数；
+- 通过数；
+- 失败数；
+- Blocked；
+- 修复后通过。
+
+## 3. Evidence 质量
+
+Evidence 至少检查四件事：
+
+1. 对象对不对；
+2. 环境/账号对不对；
+3. 时间对不对；
+4. 能不能证明 Expected。
+
+一个截图文件存在，不代表证据成立。
+
+## 4. Bug 风险
+
+不仅统计数量，还看：
+
+- 严重程度；
+- 是否主流程；
+- 是否有 workaround；
+- 是否影响多个模块；
+- 是否未回归。
+
+## 5. BLOCKED 风险
+
+明确“没测到什么”，而不是把 BLOCKED 混进通过率。
+
+## 6. PASS_AFTER_FIX
+
+在报告中可以计入最终通过，但要单独展示曾失败并修复的范围。
+
+## 7. 结论
+
+### 测试完成，可进入下一阶段
+
+核心流程通过，无阻断性未解决问题，测试范围完整。
+
+### 测试基本完成，但仍有风险
+
+存在已知非阻断问题或有限 Blocked，需要明确风险。
+
+### 不建议进入下一阶段
+
+核心流程失败、严重缺陷未解决或关键质量风险明显。
+
+### 测试未完成，无法完整结论
+
+计划范围明显未完成、关键 Blocked 或结果不完整。

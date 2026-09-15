@@ -83,8 +83,12 @@ def apply_event(d,event):
     if worker is not None: d['current_worker']=worker
     if typ=='batch_started': d['current_batch']=bid; d['current_case']=None; update_batch(d,bid,status='running')
     elif typ=='case_started': d['current_batch']=bid; d['current_case']=cid; upsert_case(d,cid,status='RUNNING',batch_id=bid)
-    elif typ=='case_finished': upsert_case(d,cid,status=event['status'],batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
-    elif typ=='case_blocked': upsert_case(d,cid,status='BLOCKED',batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
+    elif typ=='case_finished':
+        upsert_case(d,cid,status=event['status'],batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
+        if d.get('current_case')==cid: d['current_case']=None
+    elif typ=='case_blocked':
+        upsert_case(d,cid,status='BLOCKED',batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
+        if d.get('current_case')==cid: d['current_case']=None
     elif typ=='review_started':
         d['current_case']=None; d['current_worker']=None; d['current_reviewer']=event.get('reviewer_id'); d['reviewer_status'][bid]={'status':'reviewing','reviewer':event.get('reviewer_id')}
     elif typ=='review_finished':
@@ -97,12 +101,22 @@ def apply_event(d,event):
     elif typ=='bug_submitted':
         ref=event.get('bug_ref')
         if not any(x.get('id')==ref for x in d['defects']): d['defects'].append({'id':ref,'case_ids':event.get('case_ids',[]),'status':'submitted'})
+        if bid: update_batch(d,bid,status='waiting_bug_fix')
     elif typ=='bug_fixed_pending_regression':
         for b in d['defects']:
             if b.get('id')==event.get('bug_ref'): b['status']='pending_regression'
     elif typ=='regression_finished':
         for b in d['defects']:
             if b.get('id')==event.get('bug_ref'): b['status']='regression_'+str(event.get('status','')).lower()
+        if event.get('status')=='PASS':
+            for ucid in event.get('unblocked_case_ids',[]):
+                upsert_case(d,ucid,status='PENDING',blocked_reason_type=None)
+            source_batches=set(event.get('source_batch_ids',[]))
+            source_batches.update(c.get('batch_id') for c in d.get('cases',[]) if c.get('id') in set(event.get('unblocked_case_ids',[])))
+            for sbid in [x for x in source_batches if x]:
+                rows=[c for c in d.get('cases',[]) if c.get('batch_id')==sbid]
+                if any(c.get('status') in {'PENDING','RUNNING','NEEDS_REVIEW'} for c in rows): update_batch(d,sbid,status='needs_rework')
+                elif rows and all(c.get('status') in {'PASS','FAIL','BLOCKED','PASS_AFTER_FIX'} for c in rows): update_batch(d,sbid,status='completed')
     elif typ=='recording_updated':
         scope=event.get('scope')
         if scope is None:
@@ -135,9 +149,9 @@ def initialize_runtime_files(run_status_path,dashboard_path,plan):
     batch_ids=[b['id'] for b in plan.get('batches',[])]
     batch_deps,case_deps=_dependency_maps(plan)
     s.update(current_stage='execution-runtime',current_batch=None,current_case=None,current_worker=None,current_reviewer=None,
-             batch_status={bid:'pending' for bid in batch_ids},batch_order=batch_ids,batch_dependencies=batch_deps,batch_dependency_cases=case_deps,case_status={c['case_id']:'PENDING' for c in plan.get('cases',[])},open_defects=[],blocked_items=[],
+             batch_status={bid:'pending' for bid in batch_ids},batch_order=batch_ids,batch_dependencies=batch_deps,batch_dependency_cases=case_deps,case_status={c['case_id']:'PENDING' for c in plan.get('cases',[])},open_defects=[],blocked_items=[],pending_resume_batches=[],
              last_event={'type':'runtime_initialized','at':d['last_updated']},current_action={'type':'pending'},
-             next_action=({'type':'execute_batch','batch_id':batch_ids[0]} if batch_ids else {'type':'result_review'}),updated_at=d['last_updated'])
+             next_action=({'type':'prepare_batch_data','batch_id':batch_ids[0]} if batch_ids else {'type':'result_review'}),updated_at=d['last_updated'])
     write(run_status_path,s); write(dashboard_path,d); return {'run_status':s,'dashboard':d}
 
 def _select_runnable_batch(s):
@@ -146,6 +160,50 @@ def _select_runnable_batch(s):
         if statuses.get(bid)!='pending': continue
         if all(case_status.get(cid) in {'PASS','PASS_AFTER_FIX'} for cid in dep_cases.get(bid,[])): return bid
     return None
+
+def _resume_action(s):
+    queue=s.get('pending_resume_batches',[])
+    if not queue: return None
+    item=queue[0]
+    return {'type':'prepare_resumed_cases_data','batch_id':item['batch_id'],'case_ids':list(item.get('case_ids',[])),'bug_ref':item.get('bug_ref')}
+
+def _queue_unblocked_cases(s,d,event):
+    ids=[x for x in event.get('unblocked_case_ids',[]) if x]
+    if not ids: return
+    case_batch={c.get('id'):c.get('batch_id') for c in d.get('cases',[])}
+    grouped={}
+    for cid in ids:
+        bid=case_batch.get(cid)
+        if not bid: raise AssertionError(f'unblocked case {cid} has no planned batch')
+        grouped.setdefault(bid,[]).append(cid)
+    queue=s.setdefault('pending_resume_batches',[])
+    by_batch={x.get('batch_id'):x for x in queue}
+    order=s.get('batch_order',[])
+    for bid in sorted(grouped,key=lambda x: order.index(x) if x in order else len(order)):
+        item=by_batch.get(bid)
+        if item is None:
+            item={'batch_id':bid,'case_ids':[],'bug_ref':event.get('bug_ref')}; queue.append(item); by_batch[bid]=item
+        for cid in grouped[bid]:
+            if cid not in item['case_ids']: item['case_ids'].append(cid)
+        if not item.get('bug_ref'): item['bug_ref']=event.get('bug_ref')
+
+def _finish_resume_batch(s,batch_id):
+    queue=s.get('pending_resume_batches',[])
+    if any(x.get('batch_id')==batch_id for x in queue):
+        s['pending_resume_batches']=[x for x in queue if x.get('batch_id')!=batch_id]
+        return True
+    return False
+
+def _unhandled_fail_cases(s,d):
+    covered=set()
+    for df in d.get('defects',[]):
+        for cid in df.get('case_ids',[]):
+            covered.add(cid)
+    out=[]
+    for c in d.get('cases',[]):
+        if c.get('status')=='FAIL' and c.get('id') not in covered:
+            out.append(c)
+    return out
 
 def _next_action(event):
     typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
@@ -156,6 +214,8 @@ def _next_action(event):
     if typ=='review_finished':
         if event.get('status')=='rework_required': return {'type':'execute_retest','batch_id':bid,'case_ids':event.get('retest_case_ids',[])}
         if event.get('status')=='return_upstream': return {'type':'return_upstream','stage':event.get('return_stage')}
+        if event.get('unhandled_fail_case_ids'):
+            return {'type':'handle_defects','batch_id':bid,'case_ids':event.get('unhandled_fail_case_ids',[])}
         return {'type':'execute_next_batch'}
     if typ=='batch_completed': return {'type':'execute_next_batch'}
     if typ=='bug_submitted': return {'type':'wait_bug_fix','bug_ref':event.get('bug_ref')}
@@ -168,14 +228,25 @@ def _next_action(event):
 def apply_event_files(run_status_path,dashboard_path,event):
     s=read(run_status_path,{}); d=read(dashboard_path,None)
     if not d: raise AssertionError('dashboard-data.json must be initialized from execution plan before runtime events')
-    d=apply_event(d,event); typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
-    s['current_stage']=d.get('current_stage','execution-runtime'); s['current_batch']=d.get('current_batch'); s['current_case']=d.get('current_case'); s['current_worker']=d.get('current_worker'); s['current_reviewer']=d.get('current_reviewer')
+    event=dict(event); typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
+    state_stage=s.get('current_stage','execution-runtime')
+    target_stage=event.get('stage')
+    if not target_stage:
+        if typ in {'bug_submitted','bug_fixed_pending_regression'}:
+            target_stage='defect-handling'
+        elif state_stage=='defect-handling':
+            target_stage='defect-handling'
+        else:
+            target_stage=state_stage
+    d['current_stage']=target_stage
+    if typ=='regression_finished' and event.get('status')=='PASS':
+        ref=event.get('bug_ref')
+        event.setdefault('unblocked_case_ids',[x.get('case_id') for x in s.get('blocked_items',[]) if x.get('reason')==ref and x.get('case_id')])
+    d=apply_event(d,event)
+    s['current_stage']=target_stage; d['current_stage']=target_stage
+    s['current_batch']=d.get('current_batch'); s['current_case']=d.get('current_case'); s['current_worker']=d.get('current_worker'); s['current_reviewer']=d.get('current_reviewer')
     s['last_event']={'type':typ,'batch_id':bid,'case_id':cid,'at':d['last_updated']}; s['current_action']={'type':d.get('current_action')}; s['next_action']=_next_action(event); s['updated_at']=d['last_updated']
-    bs=s.setdefault('batch_status',{})
-    if typ=='batch_started': bs[bid]='running'
-    elif typ=='review_finished' and event.get('status')=='rework_required': bs[bid]='needs_rework'
-    elif typ in {'review_finished','batch_completed'} and (typ=='batch_completed' or event.get('status')=='passed'): bs[bid]='completed'
-    elif typ=='bug_submitted' and bid: bs[bid]='waiting_bug_fix'
+
     if typ=='bug_submitted':
         ref=event.get('bug_ref'); od=s.setdefault('open_defects',[])
         if ref and ref not in od: od.append(ref)
@@ -183,17 +254,81 @@ def apply_event_files(run_status_path,dashboard_path,event):
             item={'case_id':blocked_cid,'reason':ref}
             if item not in s.setdefault('blocked_items',[]): s['blocked_items'].append(item)
     elif typ=='regression_finished' and event.get('status')=='PASS':
-        ref=event.get('bug_ref'); s['open_defects']=[x for x in s.get('open_defects',[]) if x!=ref]; s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('reason')!=ref]
-        if bid: bs[bid]='completed'
+        ref=event.get('bug_ref'); unblocked=set(event.get('unblocked_case_ids',[]))
+        s['open_defects']=[x for x in s.get('open_defects',[]) if x!=ref]
+        s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('reason')!=ref]
+        for ucid in unblocked: s.setdefault('case_status',{})[ucid]='PENDING'
     if typ in {'case_finished','case_blocked'} and cid:
         s.setdefault('case_status',{})[cid]=('BLOCKED' if typ=='case_blocked' else event.get('status'))
     if typ=='case_blocked' or (typ=='case_finished' and event.get('status')=='BLOCKED'):
         item={'case_id':cid,'reason':event.get('bug_ref') or event.get('blocked_reason') or event.get('blocked_reason_type')}
         if item not in s.setdefault('blocked_items',[]): s['blocked_items'].append(item)
-    # Turn generic scheduling into a concrete next Batch after state mutation.
-    if s.get('next_action',{}).get('type') in {'execute_next_batch','continue_current_work'} or typ=='bug_submitted':
-        nxt=_select_runnable_batch(s)
-        if nxt: s['next_action']={'type':'execute_batch','batch_id':nxt}
-        elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
-        else: s['next_action']={'type':'result_review'}
+
+    # Dashboard is the projection of current Case/Batch facts; mirror those statuses into run-status.
+    s['batch_status']={b.get('id'):b.get('status') for b in d.get('batches',[]) if b.get('id')}
+    s['case_status']={c.get('id'):c.get('status') for c in d.get('cases',[]) if c.get('id')}
+    if typ=='batch_started' and bid: s.setdefault('batch_data_status',{})[bid]='in_use'
+    if typ=='review_finished' and event.get('status')=='passed' and bid: s.setdefault('batch_data_status',{})[bid]='consumed'
+
+    unhandled_fails=_unhandled_fail_cases(s,d)
+
+    if typ=='regression_finished' and event.get('status')=='PASS':
+        unblocked=event.get('unblocked_case_ids',[])
+        if unblocked:
+            _queue_unblocked_cases(s,d,event)
+            s['next_action']=_resume_action(s)
+        elif unhandled_fails:
+            fail_bid=unhandled_fails[0].get('batch_id')
+            fail_cids=[c['id'] for c in unhandled_fails if c.get('batch_id')==fail_bid]
+            s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
+        else:
+            nxt=_select_runnable_batch(s)
+            if nxt: s['next_action']={'type':'prepare_batch_data','batch_id':nxt}
+            elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
+            else: s['next_action']={'type':'result_review'}
+    elif typ=='review_finished' and event.get('status')=='passed':
+        if unhandled_fails or event.get('unhandled_fail_case_ids'):
+            fail_cids=event.get('unhandled_fail_case_ids') or [c['id'] for c in unhandled_fails if c.get('batch_id')==bid] or [c['id'] for c in unhandled_fails]
+            fail_bid=bid or (unhandled_fails[0].get('batch_id') if unhandled_fails else None)
+            s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
+        elif _finish_resume_batch(s,bid):
+            resume=_resume_action(s)
+            if resume: s['next_action']=resume
+            else:
+                nxt=_select_runnable_batch(s)
+                if nxt: s['next_action']={'type':'prepare_batch_data','batch_id':nxt}
+                elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
+                else: s['next_action']={'type':'result_review'}
+        else:
+            nxt=_select_runnable_batch(s)
+            if nxt: s['next_action']={'type':'prepare_batch_data','batch_id':nxt}
+            elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
+            else: s['next_action']={'type':'result_review'}
+    elif s.get('next_action',{}).get('type') in {'execute_next_batch','continue_current_work'} or typ=='bug_submitted':
+        if unhandled_fails and typ!='bug_submitted':
+            fail_bid=unhandled_fails[0].get('batch_id')
+            fail_cids=[c['id'] for c in unhandled_fails if c.get('batch_id')==fail_bid]
+            s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
+        else:
+            nxt=_select_runnable_batch(s)
+            if nxt: s['next_action']={'type':'prepare_batch_data','batch_id':nxt}
+            elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
+            elif unhandled_fails:
+                fail_bid=unhandled_fails[0].get('batch_id')
+                fail_cids=[c['id'] for c in unhandled_fails if c.get('batch_id')==fail_bid]
+                s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
+            else: s['next_action']={'type':'result_review'}
     write(run_status_path,s); write(dashboard_path,d); return {'run_status':s,'dashboard':d}
+
+
+
+if __name__=='__main__':
+    import argparse
+    a=argparse.ArgumentParser(description='Initialize or update the run dashboard from canonical execution events.')
+    sp=a.add_subparsers(dest='cmd',required=True)
+    p=sp.add_parser('init'); p.add_argument('--run-dir',required=True); p.add_argument('--plan',required=True)
+    p=sp.add_parser('event'); p.add_argument('--run-dir',required=True); p.add_argument('--event',required=True,help='JSON event file')
+    x=a.parse_args(); base=Path(x.run_dir); state=base/'internal/state/run-status.json'; data=base/'dashboard/dashboard-data.json'
+    if x.cmd=='init': out=initialize_runtime_files(state,data,json.loads(Path(x.plan).read_text(encoding='utf-8')))
+    else: out=apply_event_files(state,data,json.loads(Path(x.event).read_text(encoding='utf-8')))
+    print(json.dumps(out,ensure_ascii=False,indent=2))
