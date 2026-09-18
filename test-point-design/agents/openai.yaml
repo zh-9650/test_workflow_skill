@@ -1,0 +1,4 @@
+interface:
+  display_name: "测试点设计 / Test Point Design"
+  short_description: "从已确认业务理解提取可独立失败的业务机制级测试点"
+  default_prompt: "Use $test-point-design after business understanding is confirmed. Generate mechanism-level test points from confirmed events, states, relationships, invariants, failure facts and flows; review granularity and coverage; collect only genuine test-design decisions at the end of the human-readable document."

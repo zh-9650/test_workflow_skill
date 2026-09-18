@@ -1,4 +1,4 @@
 interface:
-  display_name: "测试设计 / Test Case Design"
-  short_description: "从已确认业务理解生成并审查测试点与可执行测试用例"
-  default_prompt: "Use $test-case-design after business understanding is confirmed. Derive test points with suitable techniques, review linkage/flows/risks, confirm points, then generate and review executable cases."
+  display_name: "测试用例设计 / Test Case Design"
+  short_description: "从已确认测试点展开可独立执行的测试场景、数据组和断言"
+  default_prompt: "Use $test-case-design after test points are confirmed. Expand each confirmed mechanism into sufficient executable scenarios and data groups, keep every covered test point tied to observable assertions, review whether combinations or long flows hide failures, then prepare the human-readable cases and review summary for confirmation."

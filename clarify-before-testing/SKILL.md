@@ -12,10 +12,23 @@ description: Route and resume the current software-testing Run across business u
 1. 当前是哪个测试 Run；
 2. 当前 Run 处于哪个阶段；
 3. 当前阶段应该加载哪个 Skill；
-4. 哪些正式产物已经完成 AI 自审和人工确认；
+4. 哪些正式产物已经完成自审、问题处理和人工确认；
 5. 下一步真正应该做什么，以及中断后从哪里继续。
 
 它**不负责**业务理解、测试点设计、用例生成、执行规划、数据准备、Case 执行、Bug 判断或最终质量结论。
+
+`case-design` 内部明确分成两个子阶段：
+
+```text
+test-point-design
+→ 测试点自审
+→ 人工确认
+→ test-case-design
+→ 用例自审
+→ 人工确认
+```
+
+Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同时重做两层。
 
 ---
 
@@ -52,7 +65,7 @@ result-review
 closed
 ```
 
-不要向用户输出 Gate、Lease、Heartbeat、Control Plane、Resume Pack 等框架术语。
+不要向用户输出内部调度、控制、租约或状态机实现术语。人工文档统一使用“人工确认、进入下一阶段条件、结构校验、当前阶段、恢复信息”等正常测试语言。
 
 ---
 
@@ -85,8 +98,11 @@ python clarify-before-testing/scripts/workflow_state.py discover --root work/tes
 work/test-runs/RUN-xxx/
 ├─ deliverables/
 │  ├─ 01-business-understanding.md
+│  ├─ 01-business-understanding-review.md
 │  ├─ 02-test-points.md
+│  ├─ 02-test-point-review.md
 │  ├─ 03-test-cases.md
+│  ├─ 03-test-case-review.md
 │  ├─ 04-execution-plan.md
 │  └─ 05-test-report.md
 ├─ dashboard/
@@ -110,7 +126,17 @@ work/test-runs/RUN-xxx/
 └─ scratch/
 ```
 
-用户正式阅读的产物只放 `deliverables/`。
+用户正式阅读和确认的产物只放 `deliverables/`。
+
+前半程每一阶段都必须遵循“**主文档 + 审查摘要 + 内部 JSON**”三层输出：
+
+```text
+业务理解：01-business-understanding.md + 01-business-understanding-review.md + business-model.json
+测试点：02-test-points.md + 02-test-point-review.md + test-points.json
+测试用例：03-test-cases.md + 03-test-case-review.md + test-cases.json
+```
+
+其中人工确认主要看两个 MD；JSON 是机器合同与追踪依据，不要求用户阅读。不得只生成 JSON 或只给内部摘要就要求用户确认。
 
 内部追踪、稳定 ID、映射、状态和机器字段放 `internal/`。
 
@@ -125,19 +151,21 @@ work/test-runs/RUN-xxx/
 ```text
 生成初稿
 ↓
-AI 完整自审
+完整自审并主动查漏补缺
 ↓
 自行修订
 ↓
-重新自审
+把当前可回答的待确认问题集中放到正式文档末尾
 ↓
-自审通过
+如仍有问题：等待用户批量回复，不能进入下一阶段
 ↓
-登记当前正式产物及摘要
+更新正式文档 + 内部模型 + 审查摘要
 ↓
-人工确认当前产物
+重新自审与结构校验
 ↓
-确认结果与该产物版本绑定
+问题处理完成后提交人工最终确认
+↓
+确认结果与当前三份产物版本绑定
 ```
 
 对应：
@@ -158,13 +186,32 @@ AI 完整自审
 
 ---
 
+
+## 4.1 待确认问题默认集中处理
+
+默认不要一个问题一轮对话。
+
+前半程三个阶段都应把当前可回答的待确认问题集中放到对应正式文档末尾，并给出建议方案和推荐原因。用户可以一次性批量回复；Router 收到回复后，先让当前阶段 Skill 更新文档和结构化数据，再重新自审。
+
+如果某个问题必须依赖前一个答案才能成立，只把它标记为依赖项，等前置结论回填后再刷新问题清单。
+
+业务理解阶段负责业务规则确认；测试点或测试用例阶段发现业务 Expected 不明确时，必须返回业务理解，不在当前阶段代替产品做决定。
+
+详细规范：
+
+```text
+references/human-review-and-confirmation.md
+```
+
+---
+
 # 5. 后半程执行方案也必须确认
 
 测试用例确认后：
 
 ```text
 execution-planning
-→ AI 自审执行方案
+→ 执行方案自审
 → 用户确认执行方案
 → data-readiness
 ```
@@ -203,7 +250,7 @@ execution-runtime → case-design
 
 **注意**：多批次正常循环推进（如 B1 完成后进入 `data-readiness` 为下一批次 B2 准备并绑定数据）属于正向批次流转，不属于异常回退，不需要填写 `return_reason`。
 
-不要用 Stop Hook、PreToolUse Hook、Lease、Heartbeat 去阻止正常工作。
+不要通过额外的拦截器、租约或心跳机制去阻止正常工作。
 
 ---
 
@@ -327,7 +374,8 @@ python clarify-before-testing/scripts/workflow_state.py set-final-review \
 | 当前工作 | Skill |
 |---|---|
 | 业务理解 | `test-business-modeling` |
-| 测试点 + 测试用例 | `test-case-design` |
+| 测试点设计 | `test-point-design` |
+| 测试用例设计 | `test-case-design` |
 | 执行规划 | `test-execution-planning` |
 | 当前 Batch 数据准备 | `test-data-readiness` |
 | 正式执行 | `test-execution-runtime` |
@@ -344,9 +392,9 @@ Router 只加载当前需要的 Skill，不一次性把所有 Skill 全部读入
 
 - Router 自己做业务分析；
 - Router 自己写测试点/用例；
-- Hook 参与正确性；
-- Lease / Heartbeat；
-- 高频 checkpoint；
+- 依赖额外拦截器保证正确性；
+- 额外租约或心跳机制；
+- 高频状态落点；
 - 每个操作都更新状态；
 - 只改 flag 不绑定真实产物；
 - 一个局部阻塞冻结所有无关 Batch；
@@ -358,17 +406,55 @@ Router 只加载当前需要的 Skill，不一次性把所有 Skill 全部读入
 - `references/workflow-contract.md`
 - `references/decision-and-resume.md`
 
-# 13. 工程绑定要求
+
+# 13. 设计产物版本与失效
+
+前半程正式依赖链固定：
+
+```text
+Business Model Version
+        ↓
+Test Point Design Version
+        ↓
+Test Case Design Version
+```
+
+要求：
+
+- Test Point 必须声明其基于的 `business_model_version`；
+- Test Case 必须声明其基于的 `test_point_version` 和 `business_model_version`；
+- 上游正式产物重新注册后，下游确认立即失效；
+- 不允许只改关联映射来伪装旧测试用例兼容新测试点；
+- 如果只是下游执行数据变化，不应反向修改 Business Model 或 Test Point。
+
+`case-design` 阶段的下一动作由确认状态决定：
+
+```text
+业务理解已确认 + 测试点未确认
+→ design_test_points
+
+测试点已确认 + 测试用例未确认
+→ design_test_cases
+
+测试用例已确认
+→ plan_execution
+```
+
+---
+# 14. 工程绑定要求
 
 人工确认不是一个可手改的布尔值。
 
-阶段产物进入“等待人工确认”前，Router 必须同时绑定：
+阶段产物进入“等待最终确认”前，流程必须同时绑定：
 
 - 用户可读正式产物；
-- 对应内部 Contract 输入；
-- 两者的 SHA-256；
-- Contract 的真实校验结果。
+- 用户可读审查摘要；
+- 对应内部结构化数据；
+- 三者的 SHA-256；
+- 当前阶段结构校验的真实结果。
 
-`register-artifact --self-review-status passed` 会实际调用当前阶段 Contract；Contract 不通过时不能登记为自审通过。必要时使用 `--contract-input` 指向当前内部模型。
+`register-artifact --self-review-status passed` 会实际执行当前阶段结构校验。业务理解、测试点、测试用例还必须提供 `--review-path` 绑定审查摘要。
 
-任何同类产物重新注册都会立即废除该产物以及受其影响的下游旧确认。确认后正式产物或内部 Contract 输入发生变化，也不能继续使用旧确认进入下一阶段。
+自审阶段允许存在“已明确记录、等待人工回复”的问题；这时产物可以登记为已自审，但下一动作只能是处理问题，不能最终确认。`confirm-artifact` 会再次执行更严格的最终确认校验，未解决的阻塞问题会直接拒绝确认。
+
+任何同类产物重新注册都会立即废除该产物以及受其影响的下游旧确认。确认后正式产物、审查摘要或内部结构化数据任一发生变化，也不能继续使用旧确认进入下一阶段。

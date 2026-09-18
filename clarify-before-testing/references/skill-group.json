@@ -2,6 +2,7 @@
   "skills": [
     "clarify-before-testing",
     "test-business-modeling",
+    "test-point-design",
     "test-case-design",
     "test-execution-planning",
     "test-data-readiness",
@@ -18,5 +19,9 @@
     "defect-handling",
     "result-review",
     "closed"
+  ],
+  "case_design_subphases": [
+    "test-point-design",
+    "test-case-design"
   ]
 }

@@ -3,18 +3,18 @@ import argparse, hashlib, importlib.util, json, os
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION=1
+SCHEMA_VERSION=3
 STAGES=['business-modeling','case-design','execution-planning','data-readiness','execution-runtime','defect-handling','result-review','closed']
 LEGAL={
  'business-modeling':{'case-design'},
- 'case-design':{'execution-planning'},
+ 'case-design':{'business-modeling','execution-planning'},
  'execution-planning':{'data-readiness'},
  'data-readiness':{'execution-runtime'},
  'execution-runtime':{'defect-handling','result-review','data-readiness','execution-planning','case-design'},
  'defect-handling':{'execution-runtime','data-readiness','result-review'},
  'result-review':{'closed'}, 'closed':set(),
 }
-BACKWARD={('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
+BACKWARD={('case-design','business-modeling'),('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
 ARTIFACT_FLAGS={
  'business-understanding':('business_self_review_passed','business_understanding_confirmed'),
  'test-points':('test_points_self_review_passed','test_points_confirmed'),
@@ -55,7 +55,7 @@ def init(run_dir,run_id):
        'batch_status':{},'open_defects':[],'blocked_items':[],'pending_user_inputs':[],'artifacts':{},'confirmation_bindings':{},
        'confirmations':{'business_self_review_passed':False,'business_understanding_confirmed':False,'test_points_self_review_passed':False,'test_points_confirmed':False,'test_cases_self_review_passed':False,'test_cases_confirmed':False,'planning_self_review_passed':False,'execution_plan_confirmed':False},
        'current_batch_data_ready':False,'batch_data_status':{},'batch_data_bindings':{},'pending_resume':None,
-       'final_review_status':None,'final_review_source':None,'updated_at':now()}
+       'final_review_status':None,'final_review_source':None,'current_design_subphase':None,'updated_at':now()}
     write(r/'internal/state/run-status.json',s); return s
 
 def discover(root):
@@ -128,25 +128,36 @@ def set_batch_data_ready(state_path,batch_id,manifest_path):
     s['next_action']=({'type':'resume_blocked_cases','batch_id':batch_id,'case_ids':resume.get('case_ids',[]),'bug_ref':resume.get('bug_ref')} if resume else {'type':'execute_batch','batch_id':batch_id})
     s['updated_at']=now(); write(state_path,s); return s
 
-def _validate_contract(state_path,kind,contract_input):
+def _validate_contract(state_path,kind,contract_input,for_confirmation=False):
     root=Path(__file__).resolve().parents[2]
     data=read(contract_input)
     if kind=='business-understanding':
         m=_load_module(root/'test-business-modeling/scripts/business_contract.py','business_contract_bound')
-        out=m.validate(data,require_confirmed=False)
+        out=m.validate(data,require_confirmed=for_confirmation)
     elif kind=='test-points':
-        m=_load_module(root/'test-case-design/scripts/design_contract.py','design_contract_points_bound')
-        out=m.validate_points(data,require_confirmed=False)
+        s=read(state_path)
+        bb=s.get('confirmation_bindings',{}).get('business-understanding')
+        if not bb: fail('test-points.confirmed_business','business understanding must be confirmed before Test Point self-review')
+        bp=Path(bb.get('contract_path',''))
+        if not bp.exists() or sha256(bp)!=bb.get('contract_sha256'):
+            fail('test-points.confirmed_business','confirmed business model changed or disappeared')
+        confirmed_business=read(bp)
+        m=_load_module(root/'test-point-design/scripts/test_point_contract.py','test_point_contract_bound')
+        out=m.validate(data,confirmed_business,require_confirmed=for_confirmation)
     elif kind=='test-cases':
         s=read(state_path)
         pb=s.get('confirmation_bindings',{}).get('test-points')
+        bb=s.get('confirmation_bindings',{}).get('business-understanding')
         if not pb: fail('test-cases.confirmed_points','test points must be confirmed before Case self-review')
-        pp=Path(pb.get('contract_path',''))
+        if not bb: fail('test-cases.confirmed_business','business understanding must be confirmed before Case self-review')
+        pp=Path(pb.get('contract_path','')); bp=Path(bb.get('contract_path',''))
         if not pp.exists() or sha256(pp)!=pb.get('contract_sha256'):
             fail('test-cases.confirmed_points','confirmed test-point contract input changed or disappeared')
-        confirmed_points=read(pp)
-        m=_load_module(root/'test-case-design/scripts/design_contract.py','design_contract_cases_bound')
-        out=m.validate_cases(data,require_confirmed=False,confirmed_points=confirmed_points)
+        if not bp.exists() or sha256(bp)!=bb.get('contract_sha256'):
+            fail('test-cases.confirmed_business','confirmed business model changed or disappeared')
+        confirmed_points=read(pp); confirmed_business=read(bp)
+        m=_load_module(root/'test-case-design/scripts/case_contract.py','case_contract_bound')
+        out=m.validate(data,confirmed_points,confirmed_business,require_confirmed=for_confirmation)
     elif kind=='execution-plan':
         s=read(state_path); confirmed_path,binding=_confirmed_cases_binding(s); confirmed=read(confirmed_path)
         m=_load_module(root/'test-execution-planning/scripts/execution_plan.py','execution_plan_contract_bound')
@@ -169,7 +180,7 @@ def _clear_artifact_flags(s,kind):
         s['batch_data_bindings']={}
         s['pending_resume']=None
 
-def register_artifact(state_path,kind,artifact_path,self_review_status=None,contract_input=None):
+def register_artifact(state_path,kind,artifact_path,self_review_status=None,contract_input=None,review_path=None):
     if kind not in ARTIFACT_FLAGS: fail('artifact.kind',f'unsupported {kind}')
     ap=Path(artifact_path).resolve()
     if not ap.exists() or not ap.is_file(): fail('artifact.path',f'file not found: {artifact_path}')
@@ -179,10 +190,39 @@ def register_artifact(state_path,kind,artifact_path,self_review_status=None,cont
     _clear_artifact_flags(s,kind)
     cp=_resolve_contract_input(state_path,kind,contract_input)
     rec={'path':str(ap),'sha256':sha256(ap),'contract_path':str(cp),'contract_sha256':sha256(cp),'registered_at':now(),'self_review_status':self_review_status or 'not_reviewed'}
+    if kind in {'business-understanding','test-points','test-cases'}:
+        if not review_path:
+            fail('artifact.review_path',f'{kind} requires the human-readable review summary file')
+        rp=Path(review_path).resolve()
+        if not rp.exists() or not rp.is_file():
+            fail('artifact.review_path',f'file not found: {review_path}')
+        rec['review_path']=str(rp); rec['review_sha256']=sha256(rp)
     if self_review_status=='passed':
-        rec['contract_validation']=_validate_contract(state_path,kind,cp)
+        rec['contract_validation']=_validate_contract(state_path,kind,cp,for_confirmation=False)
+        rec['ready_for_confirmation']=bool(rec['contract_validation'].get('ready_for_confirmation',True))
         s['confirmations'][ARTIFACT_FLAGS[kind][0]]=True
     s.setdefault('artifacts',{})[kind]=rec
+    if kind=='business-understanding':
+        s['current_design_subphase']=None
+        if self_review_status!='passed': s['next_action']={'type':'revise_business_understanding'}
+        elif rec.get('ready_for_confirmation'): s['next_action']={'type':'confirm_business_understanding'}
+        else: s['next_action']={'type':'resolve_business_questions','question_ids':rec['contract_validation'].get('pending_blocking_questions',[])}
+    elif kind=='test-points':
+        s['current_design_subphase']='test-point-design'
+        if self_review_status!='passed': s['next_action']={'type':'revise_test_points'}
+        elif rec['contract_validation'].get('return_to_business_understanding'):
+            s['next_action']={'type':'return_to_business_understanding','reason':'business expected remains undefined'}
+        elif rec.get('ready_for_confirmation'): s['next_action']={'type':'confirm_test_points'}
+        else: s['next_action']={'type':'resolve_test_point_questions','question_ids':rec['contract_validation'].get('pending_questions',[])}
+    elif kind=='test-cases':
+        s['current_design_subphase']='test-case-design'
+        if self_review_status!='passed': s['next_action']={'type':'revise_test_cases'}
+        elif rec['contract_validation'].get('return_to_business_understanding'):
+            s['next_action']={'type':'return_to_business_understanding','reason':'business expected remains undefined'}
+        elif rec['contract_validation'].get('return_to_test_point_design'):
+            s['next_action']={'type':'return_to_test_point_design','reason':'test mechanism is missing'}
+        elif rec.get('ready_for_confirmation'): s['next_action']={'type':'confirm_test_cases'}
+        else: s['next_action']={'type':'resolve_test_case_questions','question_ids':rec['contract_validation'].get('pending_blocking_questions',[])}
     s['last_event']={'type':'artifact_registered','kind':kind,'at':now()}; s['updated_at']=now(); write(state_path,s); return s
 
 def _assert_record_current(s,kind):
@@ -191,10 +231,16 @@ def _assert_record_current(s,kind):
     ap=Path(rec.get('path','')); cp=Path(rec.get('contract_path',''))
     if not ap.exists() or sha256(ap)!=rec.get('sha256'): fail(f'artifact.{kind}','deliverable changed or disappeared after registration')
     if not cp.exists() or sha256(cp)!=rec.get('contract_sha256'): fail(f'artifact.{kind}','internal contract input changed or disappeared after self-review')
+    if kind in {'business-understanding','test-points','test-cases'}:
+        rp=Path(rec.get('review_path',''))
+        if not rp.exists() or sha256(rp)!=rec.get('review_sha256'):
+            fail(f'artifact.{kind}','human-readable review summary changed or disappeared after registration')
     binding=s.get('confirmation_bindings',{}).get(kind)
     if binding:
         if binding.get('sha256')!=rec.get('sha256') or binding.get('contract_sha256')!=rec.get('contract_sha256'):
             fail(f'confirmation_bindings.{kind}','binding does not match current registered artifact version')
+        if kind in {'business-understanding','test-points','test-cases'} and binding.get('review_sha256')!=rec.get('review_sha256'):
+            fail(f'confirmation_bindings.{kind}','review summary binding does not match current registered artifact version')
     return rec
 
 def confirm_artifact(state_path,kind,artifact_path,confirmed_scope='current confirmed scope'):
@@ -206,11 +252,25 @@ def confirm_artifact(state_path,kind,artifact_path,confirmed_scope='current conf
     if str(ap)!=rec.get('path'): fail('artifact.path','confirmation must target the currently registered artifact path')
     self_flag,confirm_flag=ARTIFACT_FLAGS[kind]
     if rec.get('self_review_status')!='passed' or s.get('confirmations',{}).get(self_flag) is not True:
-        fail('confirmation','registered artifact must have passed contract-backed AI self-review before user confirmation')
-    # Re-run contract at confirmation time, so a stale/edited internal model cannot be confirmed.
-    _validate_contract(state_path,kind,Path(rec['contract_path']))
+        fail('confirmation','registered artifact must have passed the required self-review and structure checks before user confirmation')
+    # Re-run the stricter final-confirmation validation so unresolved blocking decisions cannot slip through.
+    final_validation=_validate_contract(state_path,kind,Path(rec['contract_path']),for_confirmation=True)
+    if final_validation.get('ready_for_confirmation') is False:
+        fail('confirmation','artifact still has unresolved blocking decisions')
     s['confirmations'][confirm_flag]=True
-    s.setdefault('confirmation_bindings',{})[kind]={'sha256':rec['sha256'],'path':rec['path'],'contract_sha256':rec['contract_sha256'],'contract_path':rec['contract_path'],'confirmed_scope':confirmed_scope,'confirmed_at':now()}
+    binding={'sha256':rec['sha256'],'path':rec['path'],'contract_sha256':rec['contract_sha256'],'contract_path':rec['contract_path'],'confirmed_scope':confirmed_scope,'confirmed_at':now()}
+    if kind in {'business-understanding','test-points','test-cases'}:
+        binding.update(review_path=rec['review_path'],review_sha256=rec['review_sha256'])
+    s.setdefault('confirmation_bindings',{})[kind]=binding
+    if kind=='business-understanding':
+        s['current_design_subphase']=None
+        s['next_action']={'type':'enter_case_design','subphase':'test-point-design'}
+    elif kind=='test-points':
+        s['current_design_subphase']='test-case-design'
+        s['next_action']={'type':'design_test_cases'}
+    elif kind=='test-cases':
+        s['current_design_subphase']=None
+        s['next_action']={'type':'plan_execution'}
     s['last_event']={'type':'artifact_confirmed','kind':kind,'at':now()}; s['updated_at']=now(); write(state_path,s); return s
 
 def _require_current_confirmed(s,kind,msg):
@@ -282,6 +342,10 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
     if batch: next_act['batch_id']=batch
     if case: next_act['case_id']=case
     s.update(current_stage=stage,current_batch=batch,current_case=case,current_worker=None,current_reviewer=None,last_event={'type':'stage_transition','from':source,'to':stage,'at':now()},current_action={'type':next_type},next_action=next_act,updated_at=now())
+    if stage=='case-design':
+        s['current_design_subphase']='test-case-design' if s.get('confirmations',{}).get('test_points_confirmed') else 'test-point-design'
+    elif stage!='case-design':
+        s['current_design_subphase']=None
     if return_reason: s['return_reason']=return_reason
     if stage=='data-readiness':
         if batch:
@@ -301,7 +365,7 @@ def main():
     p=sp.add_parser('transition'); p.add_argument('--state',required=True); p.add_argument('--stage',required=True); p.add_argument('--next',required=True); p.add_argument('--batch'); p.add_argument('--case'); p.add_argument('--return-reason')
     p=sp.add_parser('set-flag'); p.add_argument('--state',required=True); p.add_argument('--key',required=True); p.add_argument('--value',choices=['true','false'],default='true')
     p=sp.add_parser('set-batch-data-ready'); p.add_argument('--state',required=True); p.add_argument('--batch',required=True); p.add_argument('--manifest',required=True)
-    p=sp.add_parser('register-artifact'); p.add_argument('--state',required=True); p.add_argument('--kind',required=True); p.add_argument('--path',required=True); p.add_argument('--self-review-status',choices=['passed','failed']); p.add_argument('--contract-input')
+    p=sp.add_parser('register-artifact'); p.add_argument('--state',required=True); p.add_argument('--kind',required=True); p.add_argument('--path',required=True); p.add_argument('--review-path'); p.add_argument('--self-review-status',choices=['passed','failed']); p.add_argument('--contract-input')
     p=sp.add_parser('confirm-artifact'); p.add_argument('--state',required=True); p.add_argument('--kind',required=True); p.add_argument('--path',required=True); p.add_argument('--scope',default='current confirmed scope')
     p=sp.add_parser('set-final-review'); p.add_argument('--state',required=True); p.add_argument('--review-file',required=True)
     p=sp.add_parser('show'); p.add_argument('--state',required=True)
@@ -311,7 +375,7 @@ def main():
     elif x.cmd=='transition': v=transition(x.state,x.stage,x.next,x.batch,x.case,x.return_reason)
     elif x.cmd=='set-flag': v=set_flag(x.state,x.key,x.value=='true')
     elif x.cmd=='set-batch-data-ready': v=set_batch_data_ready(x.state,x.batch,x.manifest)
-    elif x.cmd=='register-artifact': v=register_artifact(x.state,x.kind,x.path,x.self_review_status,x.contract_input)
+    elif x.cmd=='register-artifact': v=register_artifact(x.state,x.kind,x.path,x.self_review_status,x.contract_input,x.review_path)
     elif x.cmd=='confirm-artifact': v=confirm_artifact(x.state,x.kind,x.path,x.scope)
     elif x.cmd=='set-final-review': v=set_final_review_from_file(x.state,x.review_file)
     else: v=read(x.state)

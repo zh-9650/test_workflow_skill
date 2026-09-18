@@ -51,4 +51,4 @@ Bug 回归通过后，只把与该 Bug 绑定的 BLOCKED Case 放入按 Batch �
 - pending_user_inputs；
 - next_action。
 
-不要生成复杂 Resume Pack。
+不要生成复杂的内部恢复包；只保留继续任务真正需要的信息。

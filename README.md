@@ -24,16 +24,17 @@
 → 最终结果复核
 ```
 
-## 8 个 Skill
+## 9 个 Skill
 
 1. `clarify-before-testing`：Run / 阶段 / 确认 / 恢复路由
 2. `test-business-modeling`：业务理解
-3. `test-case-design`：测试点 + 测试用例
-4. `test-execution-planning`：执行方式、Batch、依赖、Evidence 规划
-5. `test-data-readiness`：当前 Batch 前置数据准备
-6. `test-execution-runtime`：Batch 执行、Evidence、自审、Reviewer、局部补测
-7. `test-defect-handling`：Bug 与 Regression
-8. `test-result-review`：最终对账与测试报告
+3. `test-point-design`：业务机制级测试点设计
+4. `test-case-design`：测试用例设计
+5. `test-execution-planning`：执行方式、Batch、依赖、Evidence 规划
+6. `test-data-readiness`：当前 Batch 前置数据准备
+7. `test-execution-runtime`：Batch 执行、Evidence、自审、Reviewer、局部补测
+8. `test-defect-handling`：Bug 与 Regression
+9. `test-result-review`：最终对账与测试报告
 
 ## 核心原则
 
@@ -55,6 +56,6 @@
 
 ## 最终包结构
 
-根目录只保留本 README 与 8 个 Skill 目录，不携带开发过程审查报告、历史测试目录、缓存文件或旧兼容层。
+根目录只保留本 README 与 9 个 Skill 目录，不携带开发过程审查报告、历史测试目录、缓存文件或旧兼容层。
 
 工程 Contract 用来拦关键旁路，但 Skill 是否可用仍应以真实前向流程验证为准：正常主流程、局部补测、产品 Bug 与影响回归、中断恢复、最终关闭等。
