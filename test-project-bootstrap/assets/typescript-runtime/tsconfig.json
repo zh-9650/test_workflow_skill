@@ -3,6 +3,10 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "paths": {
+      "vitest": ["./node_modules/vitest"],
+      "@playwright/test": ["./node_modules/@playwright/test"]
+    },
     "strict": true,
     "noEmit": true,
     "types": ["node", "vitest/globals"]

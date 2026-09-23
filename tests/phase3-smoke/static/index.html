@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"><title>Testing workflow smoke fixture</title></head>
+  <body>
+    <main>
+      <h1>Item lookup</h1>
+      <button id="load-item" type="button">Load item</button>
+      <output id="result" aria-live="polite">Not loaded</output>
+    </main>
+    <script>
+      document.querySelector('#load-item').addEventListener('click', async () => {
+        const response = await fetch('/api/items/1');
+        const item = await response.json();
+        document.querySelector('#result').textContent = `${item.name} — ${item.status}`;
+      });
+    </script>
+  </body>
+</html>
