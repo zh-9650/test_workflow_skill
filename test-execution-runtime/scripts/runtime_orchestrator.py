@@ -1,7 +1,7 @@
 from copy import deepcopy
 import importlib.util, hashlib
 from pathlib import Path
-from batch_task_builder import build as build_task
+from batch_task_builder import build as build_task, validate as validate_task, EXECUTION_SCHEMA_VERSION
 from retest_task import build as build_retest
 from worker_review import validate as validate_worker_review
 from reviewer_contract import validate as validate_reviewer
@@ -114,6 +114,10 @@ import argparse as _argparse, json as _json, os as _os
 from pathlib import Path as _Path
 
 def _read_json(path): return _json.loads(_Path(path).read_text(encoding='utf-8'))
+def _read_task(base,ref):
+    task=_read_json(_Path(base)/ref)
+    validate_task(task)
+    return task
 def _write_json(path,value):
     p=_Path(path); p.parent.mkdir(parents=True,exist_ok=True); t=p.with_suffix(p.suffix+'.tmp'); t.write_text(_json.dumps(value,ensure_ascii=False,indent=2)+'\n',encoding='utf-8'); _os.replace(t,p)
 CASE_LEDGER_REL='internal/execution/results/case-results-ledger.json'
@@ -169,7 +173,7 @@ def _compose_worker_review(original,retest,all_case_ids):
 
 def _compose_reviewer_review(original,retest,all_case_ids):
     checks={k: bool((original or {}).get('checks',{}).get(k)) and bool((retest or {}).get('checks',{}).get(k)) for k in ['completeness_checked','method_consistency_checked','judgement_checked','evidence_checked','abnormal_classification_checked']}
-    return {'status':'passed','checked_case_ids':list(all_case_ids),'checks':checks,'findings':_merge_findings(original,retest),'retest_case_ids':[],'return_stage':None,'composed_from':['initial_batch_review','local_retest_review']}
+    return {'schema_version':EXECUTION_SCHEMA_VERSION,'status':'passed','checked_case_ids':list(all_case_ids),'checks':checks,'findings':_merge_findings(original,retest),'retest_case_ids':[],'return_stage':None,'composed_from':['initial_batch_review','local_retest_review']}
 
 def _dashboard_module(): return _load_module(Path(__file__).with_name('dashboard_update.py'),'runtime_dashboard_update')
 def _dashboard_shell_module(): return _load_module(Path(__file__).with_name('dashboard.py'),'runtime_dashboard_shell')
@@ -226,11 +230,11 @@ def _active_case_context(base,state,retest=False):
     if retest:
         ar=state.get('active_retest')
         if not ar: fail('status','no active retest')
-        task=_read_json(_Path(base)/ar['task_ref'])
+        task=_read_task(base,ar['task_ref'])
         partial=ar.setdefault('partial_case_results',{})
         return task,partial,ar
     if not state.get('task_ref'): fail('status','batch task is not prepared')
-    task=_read_json(_Path(base)/state['task_ref'])
+    task=_read_task(base,state['task_ref'])
     partial=state.setdefault('partial_case_results',{})
     return task,partial,state
 
@@ -317,7 +321,7 @@ def prepare_resumed_cases_files(run_dir,batch_id,case_ids,bug_ref=None):
     state=_read_json(sp)
     if state.get('status')!='completed' or not state.get('task_ref') or not state.get('worker_results_ref'):
         fail('resume.runtime_state','only a completed, reviewer-checked Batch can resume Cases unblocked by regression')
-    task0=_read_json(base/state['task_ref']); original=_read_json(base/state['worker_results_ref']); original_by=_index_results(original,'resume.original_results')
+    task0=_read_task(base,state['task_ref']); original=_read_json(base/state['worker_results_ref']); original_by=_index_results(original,'resume.original_results')
     unknown=set(wanted)-set(task0.get('case_order',[]))
     if unknown: fail('resume.case_ids',f'Cases do not belong to {batch_id}: {sorted(unknown)}')
     ledger=_read_json(_ledger_path(base)); ledger_rows=ledger.get('cases',{})
@@ -355,13 +359,13 @@ def accept_worker_results_files(run_dir,batch_id,results_path):
 def accept_self_review_files(run_dir,batch_id,review_path):
     base=_Path(run_dir); state_path=base/f'internal/execution/runtime-state/{batch_id}-state.json'; state=_read_json(state_path)
     if state.get('status')!='self_review': fail('status','self review only after worker results')
-    task=_read_json(base/state['task_ref']); results=_read_json(base/state['worker_results_ref']); review=_read_json(review_path); validate_worker_review(review,task['case_order'],results)
+    task=_read_task(base,state['task_ref']); results=_read_json(base/state['worker_results_ref']); review=_read_json(review_path); validate_worker_review(review,task['case_order'],results)
     state.update(status='reviewing',worker_self_review=review); _write_json(state_path,state); return state
 
 def accept_reviewer_files(run_dir,batch_id,review_path):
     base=_Path(run_dir); state_path=base/f'internal/execution/runtime-state/{batch_id}-state.json'; state=_read_json(state_path)
     if state.get('status')!='reviewing': fail('status','reviewer only after passed worker self-review')
-    task=_read_json(base/state['task_ref']); results=_read_json(base/state['worker_results_ref']); review=_read_json(review_path); validate_reviewer(review,task['case_order'],results); state['reviewer']=review; state.setdefault('review_history',[]).append({'type':'initial_or_batch_review','review':deepcopy(review)}); retest_ref=None
+    task=_read_task(base,state['task_ref']); results=_read_json(base/state['worker_results_ref']); review=_read_json(review_path); validate_reviewer(review,task['case_order'],results); state['reviewer']=review; state.setdefault('review_history',[]).append({'type':'initial_or_batch_review','review':deepcopy(review)}); retest_ref=None
     reviewer_id=review.get('reviewer_id') or 'result-reviewer'; _emit_dashboard(base,{'type':'review_started','batch_id':batch_id,'reviewer_id':reviewer_id})
     unhandled_fail_case_ids=[]
     if review['status']=='passed':
@@ -379,17 +383,17 @@ def accept_retest_results_files(run_dir,batch_id,results_path):
 def accept_retest_self_review_files(run_dir,batch_id,review_path):
     base=_Path(run_dir); sp=base/f'internal/execution/runtime-state/{batch_id}-state.json'; state=_read_json(sp)
     if state.get('status')!='retest_self_review': fail('status','retest self review only after retest results')
-    ar=state['active_retest']; task=_read_json(base/ar['task_ref']); results=_read_json(base/ar['results_ref']); review=_read_json(review_path); validate_worker_review(review,task['case_order'],results); ar['self_review']=review; state['status']='retest_reviewing'; _write_json(sp,state); return state
+    ar=state['active_retest']; task=_read_task(base,ar['task_ref']); results=_read_json(base/ar['results_ref']); review=_read_json(review_path); validate_worker_review(review,task['case_order'],results); ar['self_review']=review; state['status']='retest_reviewing'; _write_json(sp,state); return state
 
 def accept_retest_reviewer_files(run_dir,batch_id,review_path):
     base=_Path(run_dir); sp=base/f'internal/execution/runtime-state/{batch_id}-state.json'; state=_read_json(sp)
     if state.get('status')!='retest_reviewing': fail('status','retest reviewer only after passed retest self-review')
-    ar=state['active_retest']; task=_read_json(base/ar['task_ref']); retest_results=_read_json(base/ar['results_ref']); review=_read_json(review_path); validate_reviewer(review,task['case_order'],retest_results); ar['reviewer']=review; reviewer_id=review.get('reviewer_id') or 'result-reviewer'; _emit_dashboard(base,{'type':'review_started','batch_id':batch_id,'reviewer_id':reviewer_id})
+    ar=state['active_retest']; task=_read_task(base,ar['task_ref']); retest_results=_read_json(base/ar['results_ref']); review=_read_json(review_path); validate_reviewer(review,task['case_order'],retest_results); ar['reviewer']=review; reviewer_id=review.get('reviewer_id') or 'result-reviewer'; _emit_dashboard(base,{'type':'review_started','batch_id':batch_id,'reviewer_id':reviewer_id})
     unhandled_fail_case_ids=[]
     if review['status']=='passed':
         original=_read_json(base/state['worker_results_ref']); by={r['case_id']:r for r in original}; retest=_read_json(base/ar['results_ref'])
         for r in retest: by[r['case_id']]=r
-        task0=_read_json(base/state['task_ref']); merged=[by[c] for c in task0['case_order']]
+        task0=_read_task(base,state['task_ref']); merged=[by[c] for c in task0['case_order']]
         resume_mode=ar.get('mode')=='resume_after_regression'
         if not resume_mode: _validate_result_set(task0,merged,'merged_retest_results',base)
         initial_worker=deepcopy(state.get('worker_self_review') or {})
@@ -406,7 +410,7 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
         unhandled_fail_case_ids=_unhandled_fail_case_ids(base,merged)
     elif review['status']=='return_upstream': state['status']='return_upstream'; state['return_stage']=review['return_stage']
     else:
-        seq=len(state.get('retest_tasks',[]))+1; rt=build_retest(_read_json(base/state['task_ref']),review['retest_case_ids'],seq,_read_json(base/state['worker_results_ref'])); rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt); state['retest_tasks'].append(str(rp.relative_to(base))); state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review':None,'reviewer':None,'partial_case_results':{},'current_case':None,'current_worker':None}; state['status']='needs_rework'
+        seq=len(state.get('retest_tasks',[]))+1; rt=build_retest(_read_task(base,state['task_ref']),review['retest_case_ids'],seq,_read_json(base/state['worker_results_ref'])); rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt); state['retest_tasks'].append(str(rp.relative_to(base))); state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review':None,'reviewer':None,'partial_case_results':{},'current_case':None,'current_worker':None}; state['status']='needs_rework'
     _write_json(sp,state); _emit_dashboard(base,{'type':'review_finished','batch_id':batch_id,'reviewer_id':reviewer_id,'status':review['status'],'retest_case_ids':review.get('retest_case_ids',[]),'return_stage':review.get('return_stage'),'unhandled_fail_case_ids':unhandled_fail_case_ids}); return state
 
 def _cli():

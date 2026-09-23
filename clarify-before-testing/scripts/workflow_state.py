@@ -1,9 +1,11 @@
 from __future__ import annotations
-import argparse, hashlib, importlib.util, json, os
+import argparse, hashlib, importlib.util, json, os, runpy
 from pathlib import Path
 from datetime import datetime, timezone
 
-SCHEMA_VERSION=3
+_VERSIONS=runpy.run_path(str(Path(__file__).with_name('workflow_versions.py')))
+SCHEMA_VERSION=_VERSIONS['RUN_STATE_SCHEMA_VERSION']
+WORKFLOW_VERSION=_VERSIONS['WORKFLOW_VERSION']
 STAGES=['business-modeling','case-design','execution-planning','data-readiness','execution-runtime','defect-handling','result-review','closed']
 LEGAL={
  'business-modeling':{'case-design'},
@@ -50,7 +52,7 @@ def init(run_dir,run_id):
     r=Path(run_dir)
     for x in ['deliverables','dashboard','internal/state','internal/business','internal/design','internal/execution','internal/data','internal/defects','scripts/data','scripts/ui','scripts/api','scripts/temp','evidence','logs','downloads','scratch']:
         (r/x).mkdir(parents=True,exist_ok=True)
-    s={'schema_version':SCHEMA_VERSION,'run_id':run_id,'current_stage':'business-modeling','current_batch':None,'current_case':None,'current_worker':None,'current_reviewer':None,
+    s={'schema_version':SCHEMA_VERSION,'workflow_version':WORKFLOW_VERSION,'run_id':run_id,'current_stage':'business-modeling','current_batch':None,'current_case':None,'current_worker':None,'current_reviewer':None,
        'last_event':None,'current_action':{'type':'build_business_understanding'},'next_action':{'type':'build_business_understanding'},
        'batch_status':{},'open_defects':[],'blocked_items':[],'pending_user_inputs':[],'artifacts':{},'confirmation_bindings':{},
        'confirmations':{'business_self_review_passed':False,'business_understanding_confirmed':False,'test_points_self_review_passed':False,'test_points_confirmed':False,'test_cases_self_review_passed':False,'test_cases_confirmed':False,'planning_self_review_passed':False,'execution_plan_confirmed':False},

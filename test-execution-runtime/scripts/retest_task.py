@@ -1,4 +1,5 @@
 from copy import deepcopy
+from batch_task_builder import EXECUTION_SCHEMA_VERSION, WORKFLOW_VERSION, validate
 
 def build(original_task,retest_case_ids,sequence=1,result_context=None):
     wanted=set(retest_case_ids)
@@ -13,7 +14,9 @@ def build(original_task,retest_case_ids,sequence=1,result_context=None):
             if dep in wanted or dep in dep_ctx: continue
             if dep not in result_context: raise AssertionError(f'{c["case_id"]}.dependencies[{dep}]: retest dependency result missing')
             r=result_context[dep]; dep_ctx[dep]={'batch_id':original_task.get('batch_id'),'status':r.get('status'),'final_result':r.get('final_result')}
-    return {
+    task = {
+        'schema_version': EXECUTION_SCHEMA_VERSION,
+        'workflow_version': WORKFLOW_VERSION,
         'task_id':f'{bid}-retest-{sequence:03d}','batch_id':bid,'retest_of':bid,
         'case_order':[cid for cid in original_task['case_order'] if cid in wanted],'cases':cases,'dependency_context':dep_ctx,
         'execution_context_ref':original_task.get('execution_context_ref'),'data_manifest_ref':original_task.get('data_manifest_ref'),
@@ -21,3 +24,5 @@ def build(original_task,retest_case_ids,sequence=1,result_context=None):
         'allowed_adjustments':original_task.get('allowed_adjustments',[]),'forbidden_adjustments':original_task.get('forbidden_adjustments',[]),
         'output_paths':original_task.get('output_paths',{}),'status':'pending'
     }
+    validate(task)
+    return task

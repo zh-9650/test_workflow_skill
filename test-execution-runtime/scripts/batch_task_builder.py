@@ -1,6 +1,41 @@
 from copy import deepcopy
+from pathlib import Path
+import runpy
+
+
+_VERSIONS = runpy.run_path(
+    str(
+        Path(__file__).resolve().parents[2]
+        / 'clarify-before-testing/scripts/workflow_versions.py'
+    )
+)
+EXECUTION_SCHEMA_VERSION = _VERSIONS['EXECUTION_SCHEMA_VERSION']
+WORKFLOW_VERSION = _VERSIONS['WORKFLOW_VERSION']
 
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
+
+
+def validate(task):
+    if not isinstance(task,dict): fail('worker_task','object required')
+    if type(task.get('schema_version')) is not int or task['schema_version'] != EXECUTION_SCHEMA_VERSION:
+        fail('schema_version',f'worker task requires schema_version={EXECUTION_SCHEMA_VERSION}')
+    if task.get('workflow_version') != WORKFLOW_VERSION:
+        fail('workflow_version',f'worker task requires workflow_version={WORKFLOW_VERSION}')
+    if not isinstance(task.get('batch_id'),str) or not task['batch_id']:
+        fail('batch_id','non-empty string required')
+    order=task.get('case_order')
+    cases=task.get('cases')
+    if not isinstance(order,list) or not order or any(not isinstance(cid,str) or not cid for cid in order):
+        fail('case_order','non-empty Case ID list required')
+    if len(order)!=len(set(order)):
+        fail('case_order','duplicate Case IDs are forbidden')
+    if not isinstance(cases,list) or len(cases)!=len(order) or [c.get('case_id') for c in cases if isinstance(c,dict)]!=order:
+        fail('cases','must contain the ordered Case objects exactly once')
+    return {
+        'ok':True,
+        'schema_version':EXECUTION_SCHEMA_VERSION,
+        'workflow_version':WORKFLOW_VERSION,
+    }
 
 def _status_of(v):
     if isinstance(v,dict): return v.get('final_result') or v.get('status')
@@ -31,7 +66,9 @@ def build(plan,batch_id,execution_context_ref,data_manifest_ref,output_root='int
                 'final_result':item.get('final_result') if isinstance(item,dict) else None,
                 'reviewer_confirmed':item.get('reviewer_confirmed') if isinstance(item,dict) else None,
             }
-    return {
+    task={
+        'schema_version':EXECUTION_SCHEMA_VERSION,
+        'workflow_version':WORKFLOW_VERSION,
         'batch_id':batch_id,
         'goal':b.get('goal') or b.get('name') or batch_id,
         'case_order':list(b['case_ids']),
@@ -45,3 +82,5 @@ def build(plan,batch_id,execution_context_ref,data_manifest_ref,output_root='int
         'output_paths':{'results':f'{output_root}/{batch_id}','evidence':f'evidence/{batch_id}'},
         'status':'pending'
     }
+    validate(task)
+    return task

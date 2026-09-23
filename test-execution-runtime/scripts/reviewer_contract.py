@@ -1,3 +1,10 @@
+import runpy
+from pathlib import Path
+
+EXECUTION_SCHEMA_VERSION = runpy.run_path(
+    str(Path(__file__).resolve().parents[2] / 'clarify-before-testing/scripts/workflow_versions.py')
+)['EXECUTION_SCHEMA_VERSION']
+
 VALID={'passed','rework_required','return_upstream'}
 RETURN={None,'case_design','execution_planning','data_readiness'}
 MANDATORY=['completeness_checked','method_consistency_checked','judgement_checked','evidence_checked','abnormal_classification_checked']
@@ -7,6 +14,9 @@ def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 
 
 def validate(review, planned_case_ids, case_results=None):
+    schema_version=review.get('schema_version')
+    if type(schema_version) is not int or schema_version != EXECUTION_SCHEMA_VERSION:
+        fail('reviewer.schema_version',f'must be integer {EXECUTION_SCHEMA_VERSION}')
     st=review.get('status')
     if st not in VALID: fail('reviewer.status',f'must be one of {sorted(VALID)}')
     if not isinstance(review.get('findings'),list): fail('reviewer.findings','list required')

@@ -1,5 +1,9 @@
-import argparse, json
+import argparse, json, runpy
 from pathlib import Path
+
+EXECUTION_SCHEMA_VERSION = runpy.run_path(
+    str(Path(__file__).resolve().parents[2] / 'clarify-before-testing/scripts/workflow_versions.py')
+)['EXECUTION_SCHEMA_VERSION']
 
 FINAL={'PASS','FAIL','BLOCKED','NEEDS_REVIEW'}
 BLOCK_TYPES={'product_bug','environment','external_resource','upstream_case','manual_pending','data_unavailable','account_permission'}
@@ -57,6 +61,9 @@ def _require_single_evidence(ref,path,evidence_root,allowed_root):
 
 def validate(plan_case,result,evidence_root=None):
     cid=plan_case.get('case_id'); status=result.get('status')
+    schema_version=result.get('schema_version')
+    if type(schema_version) is not int or schema_version != EXECUTION_SCHEMA_VERSION:
+        fail(f'{cid}.schema_version',f'must be integer {EXECUTION_SCHEMA_VERSION}')
     if result.get('case_id')!=cid: fail('case_id',f'mismatch, expected {cid}')
     if status not in FINAL: fail(f'{cid}.status',f'invalid {status}')
     actual_execution=_actual(result); planned_execution=_main(plan_case)

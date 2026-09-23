@@ -1,5 +1,9 @@
-import argparse, hashlib, json
+import argparse, hashlib, json, runpy
 from pathlib import Path
+
+EXECUTION_SCHEMA_VERSION = runpy.run_path(
+    str(Path(__file__).resolve().parents[2] / 'clarify-before-testing/scripts/workflow_versions.py')
+)['EXECUTION_SCHEMA_VERSION']
 
 MAIN={'UI','API','人工'}
 AUX={'UI','API','数据库只读','Network','日志','文件','其他系统'}
@@ -33,6 +37,8 @@ def _assert_case_source(plan_case,confirmed):
 
 
 def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sha256=None):
+    if type(plan.get('schema_version')) is not int or plan['schema_version'] != EXECUTION_SCHEMA_VERSION:
+        fail('schema_version',f'execution plan requires schema_version={EXECUTION_SCHEMA_VERSION}')
     cases=plan.get('cases'); batches=plan.get('batches')
     if not isinstance(cases,list) or not cases: fail('cases','required and non-empty')
     if not isinstance(batches,list) or not batches: fail('batches','required and non-empty')
