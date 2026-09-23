@@ -1,5 +1,5 @@
 from copy import deepcopy
-from batch_task_builder import EXECUTION_SCHEMA_VERSION, WORKFLOW_VERSION, validate
+from batch_task_builder import EXECUTION_SCHEMA_VERSION, WORKFLOW_VERSION, seal_task, task_hash, validate
 
 def build(original_task,retest_case_ids,sequence=1,result_context=None):
     wanted=set(retest_case_ids)
@@ -18,11 +18,13 @@ def build(original_task,retest_case_ids,sequence=1,result_context=None):
         'schema_version': EXECUTION_SCHEMA_VERSION,
         'workflow_version': WORKFLOW_VERSION,
         'task_id':f'{bid}-retest-{sequence:03d}','batch_id':bid,'retest_of':bid,
+        'parent_task_hash':original_task.get('task_hash') or task_hash(original_task),
         'case_order':[cid for cid in original_task['case_order'] if cid in wanted],'cases':cases,'dependency_context':dep_ctx,
         'execution_context_ref':original_task.get('execution_context_ref'),'data_manifest_ref':original_task.get('data_manifest_ref'),
         'evidence_plan':{cid:original_task.get('evidence_plan',{}).get(cid,{}) for cid in wanted},
         'allowed_adjustments':original_task.get('allowed_adjustments',[]),'forbidden_adjustments':original_task.get('forbidden_adjustments',[]),
         'output_paths':original_task.get('output_paths',{}),'status':'pending'
     }
+    seal_task(task)
     validate(task)
     return task

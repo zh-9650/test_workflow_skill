@@ -1,5 +1,8 @@
 from copy import deepcopy
 from pathlib import Path
+from pathlib import PurePosixPath
+import hashlib
+import json
 import runpy
 
 
@@ -15,12 +18,57 @@ WORKFLOW_VERSION = _VERSIONS['WORKFLOW_VERSION']
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 
 
+def _canonical(value):
+    return json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+
+
+def task_hash(task):
+    payload={key:value for key,value in task.items() if key!='task_hash'}
+    return hashlib.sha256(_canonical(payload)).hexdigest()
+
+
+def seal_task(task):
+    task.pop('task_hash',None)
+    task['task_hash']=task_hash(task)
+    return task
+
+
+def _validate_automation(case, batch_id, seen_targets):
+    cid=case.get('case_id'); main=case.get('primary_execution'); auto=case.get('automation')
+    if not isinstance(auto,dict): fail(f'{cid}.automation','required by the v2 Worker Task')
+    if main=='人工':
+        if set(auto)!={'required'} or type(auto.get('required')) is not bool or auto['required'] is not False:
+            fail(f'{cid}.automation','manual Case must set boolean required=false')
+        return
+    stacks={
+        'API':('typescript','vitest','node-native-fetch','scripts/api','.test.ts'),
+        'UI':('typescript','playwright-test','playwright-page','scripts/ui','.spec.ts'),
+    }
+    if main not in stacks: fail(f'{cid}.primary_execution',f'unsupported {main!r}')
+    language,runner,driver,prefix,suffix=stacks[main]
+    expected={'required':True,'language':language,'runner':runner,'driver':driver,'script_strategy':'create_or_update'}
+    if type(auto.get('required')) is not bool: fail(f'{cid}.automation.required','boolean required')
+    for key,value in expected.items():
+        if auto.get(key)!=value: fail(f'{cid}.automation.{key}',f'must be {value!r}')
+    target=auto.get('script_target')
+    if not isinstance(target,str) or '\\' in target: fail(f'{cid}.automation.script_target','Run-relative POSIX path required')
+    parts=target.split('/'); parsed=PurePosixPath(target)
+    if parsed.is_absolute() or any(x in {'','..','.'} for x in parts) or len(parts)!=4 or parts[:3]!=[ *prefix.split('/'), batch_id ] or not parts[3].startswith(cid) or not parts[3].endswith(suffix):
+        fail(f'{cid}.automation.script_target','must be a safe scripts/<api|ui>/<Batch>/<Case>*.ts path')
+    if target in seen_targets: fail(f'{cid}.automation.script_target',f'duplicate with {seen_targets[target]}')
+    seen_targets[target]=cid
+
+
 def validate(task):
     if not isinstance(task,dict): fail('worker_task','object required')
     if type(task.get('schema_version')) is not int or task['schema_version'] != EXECUTION_SCHEMA_VERSION:
         fail('schema_version',f'worker task requires schema_version={EXECUTION_SCHEMA_VERSION}')
     if task.get('workflow_version') != WORKFLOW_VERSION:
         fail('workflow_version',f'worker task requires workflow_version={WORKFLOW_VERSION}')
+    if not isinstance(task.get('task_id'),str) or not task['task_id']:
+        fail('task_id','required')
+    if task.get('task_hash')!=task_hash(task):
+        fail('task_hash','does not match the canonical Worker Task payload')
     if not isinstance(task.get('batch_id'),str) or not task['batch_id']:
         fail('batch_id','non-empty string required')
     order=task.get('case_order')
@@ -31,6 +79,10 @@ def validate(task):
         fail('case_order','duplicate Case IDs are forbidden')
     if not isinstance(cases,list) or len(cases)!=len(order) or [c.get('case_id') for c in cases if isinstance(c,dict)]!=order:
         fail('cases','must contain the ordered Case objects exactly once')
+    targets={}
+    for case in cases:
+        if not isinstance(case,dict): fail('cases','object required')
+        _validate_automation(case,task['batch_id'],targets)
     return {
         'ok':True,
         'schema_version':EXECUTION_SCHEMA_VERSION,
@@ -73,6 +125,8 @@ def build(plan,batch_id,execution_context_ref,data_manifest_ref,output_root='int
         'goal':b.get('goal') or b.get('name') or batch_id,
         'case_order':list(b['case_ids']),
         'cases':ordered,
+        'project_testing_index_ref':'.test-workflow/PROJECT_TESTING_INDEX.md',
+        'source_refs':{c['case_id']:deepcopy(c.get('source_refs',[])) for c in ordered},
         'dependency_context':dependency_context,
         'execution_context_ref':execution_context_ref,
         'data_manifest_ref':data_manifest_ref,
@@ -82,5 +136,7 @@ def build(plan,batch_id,execution_context_ref,data_manifest_ref,output_root='int
         'output_paths':{'results':f'{output_root}/{batch_id}','evidence':f'evidence/{batch_id}'},
         'status':'pending'
     }
+    task['task_id']=f"{batch_id}-{hashlib.sha256(_canonical(task)).hexdigest()[:12]}"
+    seal_task(task)
     validate(task)
     return task

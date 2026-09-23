@@ -35,19 +35,18 @@ def test_api_plan_rejects_playwright_as_primary_driver() -> None:
         )
 
 
-@pytest.mark.xfail(strict=True, reason="Phase 4 official script provenance")
 def test_case_result_requires_final_script_and_official_run(tmp_path) -> None:
     contract = load_script(
         "test-execution-runtime/scripts/execution_control.py",
         "forward_case_contract",
     )
     plan_case, result = _case_contract_payload(tmp_path)
+    result.pop("automation_run")
 
     with pytest.raises(AssertionError, match="automation_run|script|official_run"):
         contract.validate(plan_case, result, tmp_path)
 
 
-@pytest.mark.xfail(strict=True, reason="Phase 4 independent Reviewer session")
 def test_reviewer_cannot_reuse_worker_session() -> None:
     contract = load_script(
         "test-execution-runtime/scripts/reviewer_contract.py",
@@ -60,5 +59,15 @@ def test_reviewer_cannot_reuse_worker_session() -> None:
         contract.validate(
             review,
             ["TC-001"],
+            reviewer_task={
+                "task_id": "B01-review-001",
+                "task_hash": "a" * 64,
+                "worker_session_id": "worker-session",
+                "results_sha256": "b" * 64,
+                "worker_self_review_sha256": "c" * 64,
+                "case_order": ["TC-001"],
+            },
             worker_session_id="worker-session",
+            reviewer_session_id="worker-session",
+            results_sha256="b" * 64,
         )

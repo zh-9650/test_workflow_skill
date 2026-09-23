@@ -88,6 +88,14 @@ Execution Worker：
 
 不要默认 1 Case = 1 Worker。
 
+## 3.1 必须使用真实、独立的 Agent 派发
+
+主 Agent 必须通过当前宿主的 Agent/Task 派发能力创建 Execution Worker Task，并把真实返回的 `agent_session_id`、Task ID 和派发回执交给 Runtime 记录。不得由主 Agent 自己切换身份、代写 Worker 结果，或手填/伪造 session、Task、receipt。Runtime 对回执文件的结构/哈希校验不等于宿主真实性证明；回执必须能对应到当前会话中真实的派发和完成记录，最终验收以宿主调用记录为准。
+
+Worker 必须在独立上下文中完成本 Batch 并提交自审。只有 Worker 已完成自审、提交冻结结果及其哈希后，主 Agent 才能以该冻结结果哈希为输入，创建新的 Reviewer Task 并实际派发独立 Result Reviewer。Reviewer 必须来自不同的真实 `agent_session_id`，不能复用 Worker 会话，也不能由主 Agent 自演 Reviewer。
+
+若当前环境没有真实宿主派发能力，或无法从宿主调用记录取得并核对真实 Task/session/receipt，立即停止 Runtime 派发并报告阻塞；不得通过手工填写字段或模拟回执继续。单元测试、runner 退出码为 0、任意填入的 session ID 或一份格式正确的回执 JSON 均不能替代真实前向派发验收。
+
 ---
 
 # 4. Worker Task 必须完整
@@ -108,6 +116,8 @@ Execution Worker：
 - 项目资料路径；
 - 输出目录；
 - 允许/禁止调整范围。
+- 每条自动化 Case 已确认的 `script_target`、固定语言/runner/driver、runner report 路径和结果输出路径。
+- 当前 Run、Batch、Task 关联标识及宿主派发回执保存位置。
 
 不能只给 Worker 一句“执行 B01”。
 
@@ -167,6 +177,15 @@ Execution Worker：
 ```
 
 脚本 exit code 0 不等于 Case PASS。
+
+## 6.1 自动化 Case 必须先有正式脚本
+
+自动化 Case 的第一次正式执行必须先在计划指定的 `script_target` 写入正式脚本，再由官方 runner 执行该脚本。禁止用 AI 临时点击、临时请求或其他未归档交互代替正式脚本运行，也禁止先手工试跑后补写脚本并把手工过程记作自动化结果。
+
+- API 自动化固定为 TypeScript + Vitest + Node 原生 `fetch`；UI 自动化固定为 TypeScript + Playwright Test。
+- 执行前校验 `script_target` 与已确认 Plan 一致，脚本在当前 Run 中存在且归属当前 Case；不得临时改用其他路径或驱动。
+- 保存官方 runner 原始退出码、report、report 哈希；运行前及运行后分别计算脚本 SHA-256 并确认一致，再冻结该哈希，确保哈希对应实际执行版本。两次不一致就视为脚本被改动，不能提交该次结果。
+- 缺少脚本、runner report、最终脚本哈希或 Case 映射时，结果不得进入 Worker 自审完成状态。
 
 ---
 
@@ -331,10 +350,12 @@ evidence/Bxx/TCxxx/
 - 截图按关键判断点，不按点击次数；
 - API/Network 只保留与判断有关的内容；
 - 敏感信息脱敏；
+- Runtime 会拦截常见凭据/个人信息字段名及高置信度的内联凭据、邮箱、中国手机号模式；这只是防漏检查，不是通用 DLP。Reviewer 仍须结合 Evidence 上下文检查其他敏感内容，不得把 Contract 通过说成已证明全文无敏感信息；
 - PASS 默认不长期保留 Trace；
 - FAIL / NEEDS_REVIEW / UI 调试可以保留；
-- 录屏由 Planning 决定；
+- 录屏由 Planning 的 Case 级 Evidence Plan 决定；要求录屏的 Case 必须各自保存可定位到该 Case 的录屏文件及其哈希，禁止用一个 Batch 录屏冒充多个 Case 的独立证据；
 - 日志只是调试材料，不等于测试结果；
+- 每次诊断失败都要在对应 Case 的 `debug/` 留存新增诊断证据（例如页面/DOM 状态、Network 片段、runner 错误及当时脚本哈希），并记录 Observe → Diagnose → Act 的关联；不得只保留最后成功结果或覆盖前次失败材料；
 - 下载文件归档到 Case；
 - scratch 和无价值 temp 脚本在 Batch 结束清理。
 
@@ -355,6 +376,9 @@ Batch 执行完成先检查：
 - temp/scratch 是否清理；
 - 正式脚本是否归类；
 - 日志是否泄露敏感信息。
+- 是否由真实独立 Worker Task 执行，Task、真实 `agent_session_id` 和派发回执是否可验证且互相对应；
+- 自动化 Case 是否先写指定脚本，再由固定官方 runner 执行；runner report、最终脚本哈希和 Case 映射是否完整；
+- Worker 自审后是否冻结结果并记录哈希；后续修改必须生成新版本和新哈希；
 
 有问题先补。
 
@@ -362,7 +386,7 @@ Batch 执行完成先检查：
 
 # 14. 独立 Result Reviewer
 
-Worker 自审通过后派干净上下文 Reviewer。
+Worker 自审通过并冻结结果后，Runtime 必须把本轮脚本、runner report 与 Case Evidence 复制到不可变快照目录，并将快照清单/哈希纳入 Reviewer Task。主 Agent 才能创建并实际派发新的、干净上下文 Reviewer Task。Reviewer 必须使用不同于 Worker 的真实 `agent_session_id`。派发输入须包含 Worker Task/receipt、冻结结果及哈希、脚本和 runner report 哈希及快照；Reviewer 的 Task/receipt/session 也要记录，形成可校验的前向链路。不得先创建 Reviewer 结果再补 Task，也不得以一个结果哈希审查后被替换的 Worker 结果。
 
 Reviewer 不重新完整执行系统。
 

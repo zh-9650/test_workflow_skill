@@ -32,8 +32,9 @@ def _plan() -> dict:
                     "required": True,
                     "language": "typescript",
                     "runner": "vitest",
-                    "driver": "node-native-fetch",
-                    "script_target": "scripts/api/B01/TC-API-001.test.ts",
+                "driver": "node-native-fetch",
+                "script_target": "scripts/api/B01/TC-API-001.test.ts",
+                "script_strategy": "create_or_update",
                 },
                 "dependencies": [],
                 "evidence_plan": {
@@ -118,5 +119,5 @@ def test_public_validator_rejects_non_integer_schema(invalid_schema) -> None:
 def test_version_label_alone_does_not_make_a_worker_task_valid() -> None:
     builder = _builder()
 
-    with pytest.raises(AssertionError, match="batch_id|case_order|cases"):
+    with pytest.raises(AssertionError, match="task_id|batch_id|case_order|cases"):
         builder.validate({"schema_version": 2, "workflow_version": "2.0.0"})

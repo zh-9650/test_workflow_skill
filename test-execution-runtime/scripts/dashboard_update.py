@@ -82,6 +82,8 @@ def apply_event(d,event):
     if event.get('stage'): d['current_stage']=event['stage']
     if worker is not None: d['current_worker']=worker
     if typ=='batch_started': d['current_batch']=bid; d['current_case']=None; update_batch(d,bid,status='running')
+    elif typ=='worker_dispatched': d['current_batch']=bid; d['current_case']=None; d['current_worker']=worker; d['current_reviewer']=None; update_batch(d,bid,status='running')
+    elif typ=='reviewer_dispatched': d['current_batch']=bid; d['current_case']=None; d['current_worker']=None; d['current_reviewer']=event.get('reviewer_id'); d['reviewer_status'][bid]={'status':'reviewing','reviewer':event.get('reviewer_id')}
     elif typ=='case_started': d['current_batch']=bid; d['current_case']=cid; upsert_case(d,cid,status='RUNNING',batch_id=bid)
     elif typ=='case_finished':
         upsert_case(d,cid,status=event['status'],batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
@@ -210,6 +212,8 @@ def _unhandled_fail_cases(s,d):
 def _next_action(event):
     typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
     if typ=='batch_started': return {'type':'execute_case','batch_id':bid}
+    if typ=='worker_dispatched': return {'type':'wait_for_worker_result','batch_id':bid,'worker_id':event.get('worker_id')}
+    if typ=='reviewer_dispatched': return {'type':'wait_for_reviewer_result','batch_id':bid,'reviewer_id':event.get('reviewer_id')}
     if typ=='case_started': return {'type':'execute_case','batch_id':bid,'case_id':cid}
     if typ in {'case_finished','case_blocked'}: return {'type':'continue_batch','batch_id':bid}
     if typ=='review_started': return {'type':'review_batch','batch_id':bid}

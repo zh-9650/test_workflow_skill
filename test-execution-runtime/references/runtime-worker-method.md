@@ -1,5 +1,16 @@
 # Runtime Worker 方法｜UI/API 实战执行
 
+## 0. 正式自动化脚本先行
+
+自动化 Case 第一次执行前，先按已确认 Plan 在 `script_target` 编写完整、可重复运行的正式脚本，并纳入当前 Run。禁止用临时 AI 操作先探路并把该操作当作自动化执行结果；任何探索性操作不得计入 Case 正式结果。
+
+- API：TypeScript + Vitest + Node 原生 `fetch`。
+- UI：TypeScript + Playwright Test。
+- 按计划中的官方命令运行脚本，保存原始 runner report/退出码；运行前与运行后计算脚本 SHA-256 并确认一致，再冻结该脚本哈希与 report SHA-256。哈希不一致时该次执行无效，需用稳定版本重跑。
+- report、脚本、Case/Expected 标识必须能相互映射。脚本有任何修改，重新执行并生成新的哈希和报告。
+- UI Case 的录屏按 Case Evidence Plan 单独启停、命名和归档；多个 Case 共用的 Batch 录屏不能替代 Case 级录屏。
+- 每次自动化诊断失败，立即把当时的页面/DOM 或请求响应诊断片段、错误、脚本哈希存入对应 Case 的 `debug/`，并记录诊断前后状态。保留失败尝试与修复后尝试，不能覆盖失败证据。
+
 ## 1. 每个 Case 开始先定位真实业务对象
 
 确认：
@@ -146,3 +157,7 @@ Toast “保存成功”只能证明前端收到成功反馈。
 ```
 
 Expected 是最终业务结果时必须等最终状态，不只验证“任务创建成功”。
+
+## 14. 执行交接冻结
+
+Worker 完成全部 Case 后先自审并冻结 Runtime 结果、自动化脚本及 runner reports 的哈希清单。主 Agent 只能在获得 Worker 的真实 Task/session/receipt 和冻结结果哈希后，创建新的 Reviewer Task；Reviewer Task 的输入应引用该哈希清单。Reviewer 发现需要补测或改脚本时，原冻结版本继续保留，变更后形成新的执行版本和哈希。
