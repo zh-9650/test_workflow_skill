@@ -236,7 +236,37 @@ UI Batch：串行
 
 # 9. 证据方案提前决定
 
-Planning 对每条 Case / Batch 决定：
+Planning 对每条 Case 决定证据等级和逐项 Expected 关联。所有证据项必须使用对象形式，包含 `kind` 和 `expected_ids`，不能用自由文本代替绑定关系。
+
+API 自动化固定使用 TypeScript、Vitest 和 Node 原生 `fetch`；UI 自动化固定使用 TypeScript 和 Playwright Test。每条自动化 Case 必须规划独立、Run 内的脚本目标，且路径按 `scripts/api/<Batch>/<Case>*.test.ts` 或 `scripts/ui/<Batch>/<Case>*.spec.ts` 组织。第一次执行前必须先创建正式脚本，再由对应 runner 执行。
+
+```json
+{
+  "automation": {
+    "required": true,
+    "language": "typescript",
+    "runner": "vitest",
+    "driver": "node-native-fetch",
+    "script_target": "scripts/api/B01/TC-API-001.test.ts",
+    "script_strategy": "create_or_update"
+  },
+  "evidence_plan": {
+    "level": "standard",
+    "screenshots": [],
+    "recording": false,
+    "api": [{"kind":"request_response","expected_ids":["E1"],"redacted":true}],
+    "network": [],
+    "files": [],
+    "read_back_required": false
+  }
+}
+```
+
+API 的 `read_back_required` 必须明确为 true 或 false；为 true 时还要在 `api` 中规划 kind 为 `read_back` 的证据。请求和响应证据必须明确 `redacted: true`。UI Case 至少规划一张关键断言截图；`critical` UI Case 还必须按 Case 录屏，视频不能替代截图。录屏字段只能是布尔值，不存在 Batch 级录屏。
+
+人工 Case 使用 `automation: {"required": false}`，并明确 `manual_execution.reason`、`steps` 和 `result_entry`。
+
+Planning 对每条 Case 决定：
 
 - 哪些关键结果截图；
 - 是否录完整流程；
@@ -265,7 +295,7 @@ Runtime 只执行。
 - 大量 API 参数组合；
 - 简单 CRUD。
 
-优先按业务链/Batch 录一段完整视频；关键结果仍用截图。
+录屏只按 Case 规划；关键结果仍用截图。
 
 ---
 

@@ -1,5 +1,7 @@
 import argparse, hashlib, json, runpy
 from pathlib import Path
+import re
+from pathlib import PurePosixPath
 
 EXECUTION_SCHEMA_VERSION = runpy.run_path(
     str(Path(__file__).resolve().parents[2] / 'clarify-before-testing/scripts/workflow_versions.py')
@@ -7,14 +9,57 @@ EXECUTION_SCHEMA_VERSION = runpy.run_path(
 
 MAIN={'UI','API','人工'}
 AUX={'UI','API','数据库只读','Network','日志','文件','其他系统'}
+AUTOMATION_STACKS={
+    'API': {'language':'typescript','runner':'vitest','driver':'node-native-fetch','prefix':'scripts/api/','suffix':'.test.ts'},
+    'UI': {'language':'typescript','runner':'playwright-test','driver':'playwright-page','prefix':'scripts/ui/','suffix':'.spec.ts'},
+}
 IMMUTABLE_CASE_FIELDS=('title','steps','expected_results','target_action','test_point_ids','preconditions','test_data','complex_flow','intermediate_assertions')
 
 
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 def sha256(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def _canon(v): return json.dumps(v,ensure_ascii=False,sort_keys=True,separators=(',',':'))
-def _recording_required(ep):
-    rec=ep.get('recording'); return isinstance(rec,dict) and rec.get('required') is True
+def _validate_evidence_items(cid, field, items, expected_ids):
+    if not isinstance(items,list): fail(f'{cid}.evidence_plan.{field}','list required')
+    for i,item in enumerate(items):
+        p=f'{cid}.evidence_plan.{field}[{i}]'
+        if not isinstance(item,dict): fail(p,'evidence object with kind and expected_ids required')
+        if not isinstance(item.get('kind'),str) or not item['kind'].strip(): fail(p+'.kind','non-empty kind required')
+        if field=='screenshots' and item['kind']!='screenshot': fail(p+'.kind','screenshots entries must use kind=screenshot')
+        ids=item.get('expected_ids')
+        if not isinstance(ids,list) or not ids or any(not isinstance(x,str) for x in ids): fail(p+'.expected_ids','non-empty Expected ID list required')
+        if len(ids)!=len(set(ids)) or not set(ids)<=expected_ids: fail(p+'.expected_ids','must uniquely reference Expected IDs in this Case')
+        if field=='api' and item['kind']=='request_response' and item.get('redacted') is not True:
+            fail(p+'.redacted','request/response evidence must be explicitly redacted')
+
+
+def _validate_automation(c, main, batch_id, script_targets):
+    cid=c['case_id']; auto=c.get('automation')
+    if not isinstance(auto,dict): fail(f'{cid}.automation','required object')
+    if main=='人工':
+        if set(auto)!={'required'} or type(auto.get('required')) is not bool or auto['required'] is not False:
+            fail(f'{cid}.automation','manual Case requires only boolean required=false')
+        manual=c.get('manual_execution')
+        if not isinstance(manual,dict) or not isinstance(manual.get('reason'),str) or not manual['reason'].strip(): fail(f'{cid}.manual_execution.reason','manual reason required')
+        if not isinstance(manual.get('steps'),list) or not manual['steps'] or any(not isinstance(x,str) or not x.strip() for x in manual['steps']): fail(f'{cid}.manual_execution.steps','non-empty explicit steps required')
+        if not isinstance(manual.get('result_entry'),str) or not manual['result_entry'].strip(): fail(f'{cid}.manual_execution.result_entry','result entry method required')
+        if 'script_target' in auto: fail(f'{cid}.automation.script_target','manual Case cannot have script_target')
+        return
+    expected=AUTOMATION_STACKS[main]
+    required={'required':True,'language':expected['language'],'runner':expected['runner'],'driver':expected['driver'],'script_strategy':'create_or_update'}
+    for key,value in required.items():
+        if key=='required' and type(auto.get(key)) is not bool:
+            fail(f'{cid}.automation.required','must be a boolean')
+        if auto.get(key)!=value: fail(f'{cid}.automation.{key}',f'must be {value!r} for {main}')
+    target=auto.get('script_target')
+    if not isinstance(target,str) or not target or '\\' in target: fail(f'{cid}.automation.script_target','safe Run-relative POSIX path required')
+    path=PurePosixPath(target)
+    if path.is_absolute() or any(part in {'','..','.'} for part in target.split('/')) or re.match(r'^[A-Za-z]:',target): fail(f'{cid}.automation.script_target','absolute paths and traversal are forbidden')
+    parts=target.split('/')
+    if len(parts)!=4 or '/'.join(parts[:2])!=expected['prefix'].rstrip('/') or parts[2]!=batch_id or not parts[3].startswith(cid) or not parts[3].endswith(expected['suffix']):
+        fail(f'{cid}.automation.script_target',f'must be {expected["prefix"]}{batch_id}/{cid}*{expected["suffix"]}')
+    if target in script_targets: fail(f'{cid}.automation.script_target',f'duplicate target already assigned to {script_targets[target]}')
+    script_targets[target]=cid
 
 
 def _confirmed_case_map(confirmed_cases):
@@ -69,7 +114,7 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
         for cid in b['case_ids']: case_membership.setdefault(cid,[]).append(bid)
     batch_order={bid:i for i,bid in enumerate(batch_ids)}
 
-    case_by_id={}
+    case_by_id={}; script_targets={}
     for i,c in enumerate(cases):
         p=f'cases[{i}]'; cid=c.get('case_id')
         if not cid: fail(p+'.case_id','required')
@@ -88,18 +133,27 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
             exp_ids.append(eid)
         if len(exp_ids)!=len(set(exp_ids)): fail(f'{cid}.expected_results','duplicate expected id')
         if c.get('ui_required') is True and main!='UI': fail(f'{cid}.primary_execution','UI-required case cannot use API/manual')
-        if not set(c.get('supporting_observations',c.get('aux_validation',[])))<=AUX: fail(f'{cid}.supporting_observations','contains unsupported value')
+        if 'aux_validation' in c: fail(f'{cid}.aux_validation','legacy field is not supported; use supporting_observations')
+        supporting=c.get('supporting_observations',[])
+        if not isinstance(supporting,list) or any(not isinstance(x,str) or x not in AUX for x in supporting): fail(f'{cid}.supporting_observations','contains unsupported value')
+        if 'depends_on' in c: fail(f'{cid}.depends_on','legacy field is not supported; use dependencies')
+        _validate_automation(c,main,bid,script_targets)
         ep=c.get('evidence_plan')
         if not isinstance(ep,dict) or not ep: fail(f'{cid}.evidence_plan','must be explicit, not empty shell')
+        if 'waiver_reason' in ep: fail(f'{cid}.evidence_plan.waiver_reason','waivers are not supported; plan concrete evidence')
+        level=ep.get('level')
+        if level not in {'standard','critical'}: fail(f'{cid}.evidence_plan.level','must be standard or critical')
         for k in ['screenshots','api','network','files']:
-            if k not in ep or not isinstance(ep[k],list): fail(f'{cid}.evidence_plan.{k}','list required')
-        if 'recording' not in ep: fail(f'{cid}.evidence_plan.recording','required')
-        rec=ep['recording']
-        if rec is not False and not isinstance(rec,dict): fail(f'{cid}.evidence_plan.recording','must be false or object')
-        if isinstance(rec,dict) and rec.get('required') is True and rec.get('scope') not in {'batch','case'}: fail(f'{cid}.evidence_plan.recording.scope','batch|case required when recording is required')
-        waiver=ep.get('waiver_reason')
-        if main=='UI' and not ep['screenshots'] and not _recording_required(ep) and not waiver: fail(f'{cid}.evidence_plan','UI case requires screenshot/recording or waiver_reason')
-        if main=='API' and not ep['api'] and not waiver: fail(f'{cid}.evidence_plan.api','API case requires request/response evidence or waiver_reason')
+            if k not in ep: fail(f'{cid}.evidence_plan.{k}','required')
+            _validate_evidence_items(cid,k,ep[k],set(exp_ids))
+        if 'recording' not in ep or not isinstance(ep['recording'],bool): fail(f'{cid}.evidence_plan.recording','case-level boolean required; Batch recording is not supported')
+        if main=='UI' and not ep['screenshots']: fail(f'{cid}.evidence_plan.screenshots','UI Case requires a key assertion screenshot mapped to an Expected')
+        if main=='UI' and level=='critical' and ep['recording'] is not True: fail(f'{cid}.evidence_plan.recording','critical UI Case requires case-level recording')
+        if main=='API':
+            api_kinds={item['kind'] for item in ep['api']}
+            if 'request_response' not in api_kinds: fail(f'{cid}.evidence_plan.api','API Case requires redacted request_response evidence')
+            if 'read_back_required' not in ep or not isinstance(ep['read_back_required'],bool): fail(f'{cid}.evidence_plan.read_back_required','explicit boolean decision required')
+            if ep['read_back_required'] and 'read_back' not in api_kinds: fail(f'{cid}.evidence_plan.api','required read_back evidence is missing')
         if c.get('downloads_file') is True and not ep['files']: fail(f'{cid}.evidence_plan.files','download case requires files evidence')
 
     for bid,b in batch_by_id.items():
@@ -111,7 +165,7 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
 
     graph={cid:[] for cid in case_by_id}
     for cid,c in case_by_id.items():
-        deps=c.get('dependencies',c.get('depends_on',[])) or []
+        deps=c.get('dependencies',[]) or []
         if not isinstance(deps,list): fail(f'{cid}.dependencies','list required')
         for d in deps:
             if d not in case_by_id: fail(f'{cid}.dependencies',f'unknown case {d}')

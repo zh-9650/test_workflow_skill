@@ -53,9 +53,11 @@ UI 截图不一定能证明数据库业务事实；API 200 也不一定能证明
 - 同一 Batch；
 - 一个 Worker；
 - 串行；
-- Batch 级录屏；
+- 每个 critical UI Case 单独录屏；
 - 关键节点截图；
 - 必要的 API/Network read-back。
+
+自动化栈是固定契约：API 使用 TypeScript + Vitest + Node 原生 fetch；UI 使用 TypeScript + Playwright Test。每条自动化 Case 在首次执行前必须先写入其唯一 `script_target`，随后使用指定 runner 正式运行。证据项用 `kind` 和 `expected_ids` 绑定到具体 Expected；API 请求/响应必须脱敏，并显式决定是否需要 read-back。
 
 ## 6. 人工 Case
 

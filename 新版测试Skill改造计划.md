@@ -1,6 +1,6 @@
 # 新版测试 Skill 改造计划
 
-> 状态：实施中（Phase 0、Phase 1 已完成；Phase 2 待实施）
+> 状态：实施中（Phase 0、Phase 1、Phase 2 已完成；Phase 3 待实施）
 > 目标仓库：`C:\Users\17381\Desktop\测试全流程skill`
 > 改造策略：直接升级当前版本，不保留旧执行契约兼容层；完成验收并经用户确认后，再覆盖同步到实际 Skill 安装目录。
 > 本文是本轮改造的事实源。实施中若要改变冻结决策，必须先更新本文并说明理由，不能边改边改变架构。
@@ -299,12 +299,15 @@ Planning 对每个 Case 明确：
     "level": "standard",
     "screenshots": [],
     "recording": false,
-    "api": [],
+    "api": [{"kind":"request_response","expected_ids":["E1"],"redacted":true}],
     "network": [],
-    "files": []
+    "files": [],
+    "read_back_required": false
   }
 }
 ```
+
+证据列表项均使用 `kind` 与 `expected_ids` 绑定到具体 Expected；API 请求/响应项还必须声明 `redacted: true`。API Case 必须显式声明 `read_back_required`，为 true 时同时规划 `kind=read_back` 的 API 证据。录屏只接受 Case 级布尔值。
 
 两档即可，不再增加复杂等级：
 

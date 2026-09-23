@@ -13,7 +13,6 @@ from test_execution_plan_v2 import _confirmed_cases, _plan
 from test_runtime_schema_v2 import _case_contract_payload, _reviewer_result
 
 
-@pytest.mark.xfail(strict=True, reason="Phase 2 Planning V2 stack mapping")
 def test_api_plan_rejects_playwright_as_primary_driver() -> None:
     contract = load_script(
         "test-execution-planning/scripts/execution_plan.py",
