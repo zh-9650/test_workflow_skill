@@ -34,6 +34,10 @@ Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同
 
 # 1. 总流程
 
+进入目标项目前，先检查 `test-project-bootstrap` 的项目 Profile、工作流版本和 `CLAUDE.md` 测试托管区块。缺失或漂移时先完成项目级 Bootstrap，再发现或创建 Run。Bootstrap 不写 `current_stage`，普通 Run 恢复不重复初始化。目标项目若尚未经用户授权，不运行 Bootstrap 修改该项目。
+
+正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。Worker 自审后必须派新会话的 Result Reviewer；子 Agent 不可用时停在明确等待/阻塞状态，不能由主 Agent代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
+
 用户侧使用正常测试语言：
 
 ```text
@@ -71,7 +75,7 @@ closed
 
 # 2. 首先判断当前 Run
 
-进入任何阶段前，先检查是否已有当前 Run。
+项目 Bootstrap 已完成且版本匹配后，再检查是否已有当前 Run。
 
 优先：
 

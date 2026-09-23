@@ -1,4 +1,5 @@
 {
+  "project_bootstrap": "test-project-bootstrap",
   "skills": [
     "clarify-before-testing",
     "test-business-modeling",
