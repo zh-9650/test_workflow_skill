@@ -1,9 +1,0 @@
-{
-  "agent_role": "result_reviewer",
-  "agent_session_id": "/root/phase6_result_reviewer_b01",
-  "dispatch_source": "codex_subagent_tool",
-  "host_dispatch_ref": "/root/phase6_result_reviewer_b01",
-  "task_id": "B01-reviewer-001",
-  "task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d",
-  "started_at": "2026-09-23T14:09:58Z"
-}

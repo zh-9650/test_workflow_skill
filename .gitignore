@@ -3,3 +3,7 @@ __pycache__/
 node_modules/
 test-results/
 .phase*/
+.deepeval/
+tests/
+test-project-bootstrap/
+新版测试Skill改造计划.md
