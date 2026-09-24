@@ -185,3 +185,18 @@ def test_reviewer_contract_rejects_review_input_digest_drift() -> None:
             worker_session_id='worker-session', reviewer_session_id='reviewer-session',
             results_sha256=SHA_B,
         )
+
+
+def test_worker_receipt_result_status_summarizes_each_case(monkeypatch):
+    monkeypatch.syspath_prepend('test-execution-runtime/scripts')
+    runtime = load_script(
+        'test-execution-runtime/scripts/runtime_orchestrator.py', 'receipt_result_status'
+    )
+    assert runtime._result_status_summary([
+        {'case_id': 'TC-001', 'status': 'PASS'},
+        {'case_id': 'TC-002', 'status': 'PASS'},
+    ]) == {'overall': 'PASS', 'cases': {'TC-001': 'PASS', 'TC-002': 'PASS'}}
+    assert runtime._result_status_summary([
+        {'case_id': 'TC-001', 'status': 'PASS'},
+        {'case_id': 'TC-002', 'status': 'FAIL'},
+    ])['overall'] == 'FAIL'

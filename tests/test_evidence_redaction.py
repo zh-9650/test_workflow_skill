@@ -20,7 +20,13 @@ def execution_control():
         {"response": {"customer_email": "alice@example.com"}},
         {"response": {"national_id": "123456789"}},
         {"request": {"headers": {"authorization": "Bearer abcdefghijklmnop"}}},
+        {"request": {"headers": {"auth": "raw-auth-value"}}},
+        {"request": {"credential": "raw-credential-value"}},
+        {"request": {"private_key": "raw-private-key-value"}},
         {"response": {"message": "contact alice@example.com"}},
+        {"request": {"url": "https://example.test/?access_token=abcdefghijklmnop"}},
+        {"request": {"url": "https://example.test/?api_key=abcdefghijklmnop"}},
+        {"response": {"message": "-----BEGIN PRIVATE KEY-----\\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n-----END PRIVATE KEY-----"}},
     ],
 )
 def test_evidence_contract_rejects_common_unredacted_sensitive_values(

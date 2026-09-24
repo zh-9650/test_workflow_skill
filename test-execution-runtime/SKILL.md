@@ -1,6 +1,6 @@
 ---
 name: test-execution-runtime
-description: Execute one planned, data-ready Batch reliably and produce trustworthy per-Case results and evidence. 仅在执行方案已确认且当前 Batch 数据已准备完成时使用。1 Batch = 1 Execution Worker，Batch 内默认串行；严格保持 Planning 的主执行方式，逐项验证 Expected，技术错误先诊断而不是判产品 FAIL；Worker 自审后由独立 Reviewer 复核，必要时只局部补测。
+description: Execute planned, data-ready Batch(es) reliably and produce trustworthy per-Case results and evidence. 仅在执行方案已确认且当前 Batch 数据已准备完成时使用。每 Batch 一位独立 Execution Worker，Batch 内默认串行；仅 Router 明确授权的 parallel_safe Batch 可并行且各自独立复核。
 ---
 
 # Test Execution Runtime｜正式执行
@@ -95,6 +95,12 @@ Execution Worker：
 Worker 必须在独立上下文中完成本 Batch 并提交自审。只有 Worker 已完成自审、提交冻结结果及其哈希后，主 Agent 才能以该冻结结果哈希为输入，创建新的 Reviewer Task 并实际派发独立 Result Reviewer。Reviewer 必须来自不同的真实 `agent_session_id`，不能复用 Worker 会话，也不能由主 Agent 自演 Reviewer。
 
 若当前环境没有真实宿主派发能力，或无法从宿主调用记录取得并核对真实 Task/session/receipt，立即停止 Runtime 派发并报告阻塞；不得通过手工填写字段或模拟回执继续。单元测试、runner 退出码为 0、任意填入的 session ID 或一份格式正确的回执 JSON 均不能替代真实前向派发验收。
+
+## 3.2 多 Batch 并行
+
+默认按 Router 的单个 `execute_batch` 串行推进。只有 Router 输出带完整 `batch_ids` 的 `execute_parallel_batches` 才能启动并行组；Runtime 还要逐个重新核对每个已确认计划、独立 Data Manifest、`parallel_safe=true`、跨 Batch 依赖和对象引用隔离。任一 Batch 未绑定、依赖另一个活动 Batch、或对象引用重叠时拒绝并行，回到 Router 排队执行。
+
+每个 Batch 有自己的 Runtime state、Worker Task/receipt、正式结果和 Reviewer Task/receipt。主 Agent 分别派发每位 Worker；一个 Batch 的 Worker 自审完成后，只为该 Batch 派独立 Reviewer。Dashboard 以 Run 级锁串行更新共享投影，保留每个 Batch 的 session、receipt 与结果状态；当前活动指针只是最新活动显示，不能作为并行状态源。
 
 ---
 
@@ -490,7 +496,11 @@ Runtime `case-finish` → 校验 Result/Evidence → 保存该 Case 结果 → D
 进入下一 Case
 ```
 
-Batch 内仍由同一个 Worker 串行执行，不因此变成“一 Case 一个 Agent”。如果执行中断，已经 `case-finish` 的 Case 结果保留；当前未完成 Case 从 Case 开头重新执行。局部补测使用对应的 `retest-case-start / retest-case-finish`。
+Batch 内仍由同一个 Worker 串行执行，不因此变成“一 Case 一个 Agent”。如果 Worker 只是执行过程短暂中断且宿主会话仍可恢复，由同一会话从当前未完成 Case 开头重跑；已经 `case-finish` 的 Case 结果保留。
+
+如果宿主明确报告 Worker Task 已终止（例如额度耗尽），禁止沿用旧 session 或直接覆盖其 receipt。主 Agent先保存宿主返回的真实终止信息，并用 `worker-recover-dispatch` 为同一冻结 Task 派发新 Worker：该命令只接受尚无任何已提交 Case Result 的活动 Task，将旧派发、终止记录、当前 Case 脚本和 Evidence 做不可变快照，再绑定真实新 session。新 Worker 必须从当前 Case 开始重新执行正式脚本并完成自审；Reviewer Task 与 Final Review 必须校验完整恢复链。若 Task 已提交过 Case Result，Runtime 拒绝原地更换 Worker；按明确的新 Task/Run 流程恢复，不能混用多个 Worker 的 Batch 结果。
+
+局部补测使用对应的 `retest-case-start / retest-case-finish`。恢复当前活动 Worker Task 的宿主终止流程使用 `worker-recover-dispatch`，不能通过手改 Runtime state 或 Dashboard 实现。
 
 运行中持续更新：
 
@@ -512,7 +522,9 @@ Batch 内仍由同一个 Worker 串行执行，不因此变成“一 Case 一个
 
 # 18. 恢复
 
-中断后从 Case 开头重跑。
+先确认宿主 Worker Task 是暂时中断还是已终止。仍可恢复时，由原 Worker 会话从 Case 开头重跑；已终止时必须保存终止证据并通过 `worker-recover-dispatch` 为同一冻结 Task 派发新的真实 Worker session。
+
+新 Worker 在收到 Runtime 确认派发后才可开始 Case；先核对 Data、冻结 Task 和现有正式脚本，再重新运行该 Case 的完整正式脚本。主 Agent不得接手执行或自审。恢复记录和旧尝试 Artifact 必须由 Reviewer 独立检查。
 
 先重新检查数据当前状态。
 

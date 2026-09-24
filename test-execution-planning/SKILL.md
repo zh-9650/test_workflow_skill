@@ -236,7 +236,7 @@ UI Batch：串行
 
 # 9. 证据方案提前决定
 
-Planning 对每条 Case 决定证据等级和逐项 Expected 关联。所有证据项必须使用对象形式，包含 `kind` 和 `expected_ids`，不能用自由文本代替绑定关系。
+Planning 对每条 Case 决定证据等级和逐项 Expected 关联。所有证据项必须使用对象形式，包含 `kind` 和 `expected_ids`，不能用自由文本代替绑定关系。计划必须精确保留 Case Design 的机器证据策略：不能降低等级、取消录屏，或遗漏所要求的证据类型及断言映射。自动化 Case 的 `runner_report` 必须绑定到官方 Runner 报告，并对每个必需 Expected 引用同一报告；人工 Case 不得要求 runner_report。
 
 API 自动化固定使用 TypeScript、Vitest 和 Node 原生 `fetch`；UI 自动化固定使用 TypeScript 和 Playwright Test。每条自动化 Case 必须规划独立、Run 内的脚本目标，且路径按 `scripts/api/<Batch>/<Case>*.test.ts` 或 `scripts/ui/<Batch>/<Case>*.spec.ts` 组织。第一次执行前必须先创建正式脚本，再由对应 runner 执行。
 

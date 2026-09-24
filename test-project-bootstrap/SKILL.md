@@ -10,7 +10,7 @@ description: Initialize or refresh the testing workflow entrypoint for an explic
 1. 先读取目标项目已有 `CLAUDE.md`、项目资料和构建入口。不要覆盖托管区块以外的内容，也不要把密钥值写入索引。
 2. 执行 `python test-project-bootstrap/scripts/bootstrap_project.py --project-root <项目根目录>`。脚本只管理 `CLAUDE.md` 的 `TEST-WORKFLOW` 区块、`.test-workflow/`、两个项目级 Claude Agent 定义和 `work/test-automation/` 公共骨架。
 3. 读取生成的 `.test-workflow/PROJECT_TESTING_INDEX.md` 和 `project-profile.json`，人工核对项目资料入口、命令、环境标识及缺失项。脚本的路径发现只是索引初稿，不能代替对项目资料的业务理解。
-4. 同版本且来源不变时再次运行应不改文件；版本或索引来源漂移时，只刷新受管内容。若存在重复/不完整托管标记，停止并交由人核对。
+4. 同版本且来源不变时再次运行应不改文件；版本或索引来源漂移时，只刷新受管内容。写入前先检查所有受管文件目标（包括 Agent 定义、公共骨架、测试索引和 Profile）：首次接入遇到非本 Skill 文件，或升级时发现文件被项目修改，必须整体停止并报告冲突，不得覆盖。受管目标为符号链接或非普通文件时也停止。若存在重复/不完整托管标记，也停止并交由人核对。
 5. Bootstrap 不写 `current_stage`，完成后交给 Router 发现或创建 Run。若宿主不能派独立 Worker 和 Reviewer，Runtime 应停在明确等待/阻塞状态。
 
 具体方法和受管边界见 [project-bootstrap-method.md](references/project-bootstrap-method.md)。

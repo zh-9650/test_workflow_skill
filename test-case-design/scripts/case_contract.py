@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from pathlib import Path
 
 PRIORITIES = {"P0", "P1", "P2"}
@@ -15,6 +16,7 @@ STRATEGIES = {
     "long_flow", "combined"
 }
 CHECKPOINTS = {"step", "intermediate", "final"}
+EVIDENCE_KINDS = {"screenshot", "request_response", "read_back", "network", "file", "runner_report"}
 VAGUE_EXACT = {
     "正常", "正常展示", "正常返回", "结果正确", "符合预期", "符合规则",
     "按实际实现", "按最终口径", "无异常", "成功", "失败"
@@ -60,8 +62,8 @@ def validate_expected(value, path):
 def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
     if not isinstance(v, dict):
         fail("test_case_design", "object required")
-    if not text(v.get("schema_version")):
-        fail("schema_version", "required")
+    if v.get("schema_version") != "2.0.0":
+        fail("schema_version", "test case design requires schema_version=2.0.0")
     if not text(v.get("case_design_version")):
         fail("case_design_version", "required")
 
@@ -241,12 +243,17 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
     for i, case in enumerate(templates):
         p = f"case_templates[{i}]"
         ctype = case.get("case_type")
+        case_id = case.get("case_id")
+        if not isinstance(case_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", case_id):
+            fail(f"{p}.case_id", "safe stable identifier required")
         if ctype not in CASE_TYPES:
             fail(f"{p}.case_type", f"unsupported case type {ctype}")
         if case.get("priority") not in PRIORITIES:
             fail(f"{p}.priority", "must be P0/P1/P2")
         if not text(case.get("title")):
             fail(f"{p}.title", "required")
+        if not text(case.get("target_action")):
+            fail(f"{p}.target_action", "explicit tested action required for Execution Planning")
 
         tpids = case.get("test_point_ids")
         if not isinstance(tpids, list) or not tpids:
@@ -268,12 +275,16 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
         steps = case.get("steps")
         if not isinstance(steps, list) or not steps:
             fail(f"{p}.steps", "non-empty required")
+        step_ids = set()
         for j, step in enumerate(steps):
             q = f"{p}.steps[{j}]"
             if not isinstance(step, dict) or not text(step.get("action")):
                 fail(q, "step object with non-empty action required")
             if not text(step.get("step_id")):
                 fail(f"{q}.step_id", "required")
+            if step["step_id"] in step_ids:
+                fail(f"{q}.step_id", "must be unique within the Case")
+            step_ids.add(step["step_id"])
 
         assertions = case.get("assertions")
         if not isinstance(assertions, list) or not assertions:
@@ -290,6 +301,8 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
             local_ids.add(aid)
             if a.get("checkpoint") not in CHECKPOINTS:
                 fail(f"{q}.checkpoint", f"must be one of {sorted(CHECKPOINTS)}")
+            if a["checkpoint"] in {"step", "intermediate"} and a.get("step_id") not in step_ids:
+                fail(f"{q}.step_id", "step/intermediate checkpoint must reference an existing step")
             validate_expected(a.get("expected"), f"{q}.expected")
             atps = a.get("test_point_ids")
             if not isinstance(atps, list) or not atps:
@@ -306,6 +319,30 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
         missing_assert = set(tpids) - covered_by_assertions
         if missing_assert:
             fail(f"{p}.assertions", f"test points without assertion mapping {sorted(missing_assert)}")
+
+        policy = case.get("evidence_policy")
+        if not isinstance(policy, dict) or policy.get("level") not in {"standard", "critical"}:
+            fail(f"{p}.evidence_policy", "machine-readable level=standard|critical is required")
+        if type(policy.get("recording_required")) is not bool:
+            fail(f"{p}.evidence_policy.recording_required", "boolean required")
+        required_evidence = policy.get("required")
+        if not isinstance(required_evidence, list):
+            fail(f"{p}.evidence_policy.required", "list required")
+        for k, item in enumerate(required_evidence):
+            ep = f"{p}.evidence_policy.required[{k}]"
+            if not isinstance(item, dict) or not text(item.get("kind")):
+                fail(ep, "evidence kind required")
+            if item["kind"] not in EVIDENCE_KINDS:
+                fail(f"{ep}.kind", f"unsupported evidence kind {item['kind']}")
+            assertion_ids = item.get("assertion_ids")
+            if not isinstance(assertion_ids, list) or not assertion_ids or len(assertion_ids) != len(set(assertion_ids)):
+                fail(f"{ep}.assertion_ids", "non-empty unique assertion ids required")
+            if not set(assertion_ids) <= local_ids:
+                fail(f"{ep}.assertion_ids", "must reference assertions in this Case")
+            if item["kind"] == "request_response" and item.get("redacted") is not True:
+                fail(f"{ep}.redacted", "request_response evidence must require redaction")
+        if policy["level"] == "critical" and policy["recording_required"] is not True:
+            fail(f"{p}.evidence_policy.recording_required", "critical evidence policy requires recording")
 
         if len(tpids) > 1:
             if not text(case.get("merge_rationale")):
@@ -375,6 +412,11 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
         eids = inst.get("expected_assertion_ids")
         if not isinstance(eids, list) or not eids:
             fail(f"{p}.expected_assertion_ids", "non-empty required")
+        if len(eids) != len(set(eids)):
+            fail(f"{p}.expected_assertion_ids", "duplicate assertion id")
+        instance_id = inst.get("instance_id")
+        if not isinstance(instance_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}", instance_id):
+            fail(f"{p}.instance_id", "safe stable identifier required")
         unknown_a = set(eids) - case_to_assertions[cid]
         if unknown_a:
             fail(f"{p}.expected_assertion_ids", f"unknown assertions for case {sorted(unknown_a)}")
@@ -385,9 +427,23 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
         asserted_tps = set()
         for aid in eids:
             asserted_tps |= assertion_to_tp[aid]
-        missing = set(tpids) - asserted_tps
-        if missing:
-            fail(f"{p}.expected_assertion_ids", f"declared TPs lack instance assertions {sorted(missing)}")
+        if asserted_tps != set(tpids):
+            missing = sorted(set(tpids) - asserted_tps)
+            extra = sorted(asserted_tps - set(tpids))
+            fail(f"{p}.expected_assertion_ids", f"assertion TP coverage must exactly match instance TPs; missing={missing}, extra={extra}")
+
+    policy_assertion_ids = {
+        assertion_id
+        for case in templates
+        for item in case["evidence_policy"]["required"]
+        for assertion_id in item["assertion_ids"]
+    }
+    included_assertion_ids = {
+        assertion_id for instance in instances for assertion_id in instance["expected_assertion_ids"]
+    }
+    missing_policy_assertions = policy_assertion_ids - included_assertion_ids
+    if missing_policy_assertions:
+        fail("evidence_policy", f"required evidence assertions are not assigned to any execution instance: {sorted(missing_policy_assertions)}")
 
     # Every template must have an instance; parameterized means 2+.
     for i, case in enumerate(templates):
@@ -457,6 +513,58 @@ def validate(v, confirmed_points, confirmed_business, require_confirmed=True):
         "return_to_test_point_design": bool(return_to_test_points),
         "ready_for_confirmation": ready,
     }
+
+
+def project_execution_cases(v):
+    """Compile the confirmed design model into deterministic, instance-level Runtime Cases.
+
+    Call only after validate() succeeds. The source Case Design remains the single
+    authority; this projection is recomputed by each downstream consumer.
+    """
+    templates = {case["case_id"]: case for case in v["case_templates"]}
+    instances_by_case = {case_id: [] for case_id in templates}
+    for instance in v["execution_instances"]:
+        instances_by_case[instance["case_id"]].append(instance)
+
+    result = []
+    for template_id, template in templates.items():
+        instances = instances_by_case[template_id]
+        for instance in instances:
+            case_id = template_id if len(instances) == 1 else f"{template_id}--{instance['instance_id']}"
+            assertion_by_id = {item["assertion_id"]: item for item in template["assertions"]}
+            expected_results = [
+                {
+                    "id": assertion_id,
+                    "expected": assertion_by_id[assertion_id]["expected"],
+                    "checkpoint": assertion_by_id[assertion_id]["checkpoint"],
+                    **({"step_id": assertion_by_id[assertion_id]["step_id"]} if assertion_by_id[assertion_id]["checkpoint"] in {"step", "intermediate"} else {}),
+                }
+                for assertion_id in instance["expected_assertion_ids"]
+            ]
+            result.append({
+                "case_id": case_id,
+                "title": template["title"],
+                "steps": template["steps"],
+                "expected_results": expected_results,
+                "target_action": template["target_action"],
+                "test_point_ids": instance["test_point_ids"],
+                "preconditions": template.get("preconditions", []),
+                "test_data": instance["test_data"],
+                "template_case_id": template_id,
+                "execution_instance_id": instance["instance_id"],
+                "evidence_policy": {
+                    **template["evidence_policy"],
+                    "required": [
+                        {**item, "assertion_ids": [aid for aid in item["assertion_ids"] if aid in set(instance["expected_assertion_ids"])]}
+                        for item in template["evidence_policy"]["required"]
+                        if set(item["assertion_ids"]) & set(instance["expected_assertion_ids"])
+                    ],
+                },
+            })
+    ids_out = [case["case_id"] for case in result]
+    if len(ids_out) != len(set(ids_out)):
+        fail("execution_case_projection", "projected Runtime Case IDs must be unique")
+    return result
 
 
 if __name__ == "__main__":

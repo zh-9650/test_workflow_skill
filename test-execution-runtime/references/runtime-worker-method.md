@@ -8,6 +8,8 @@
 - UI：TypeScript + Playwright Test。
 - 按计划中的官方命令运行脚本，保存原始 runner report/退出码；运行前与运行后计算脚本 SHA-256 并确认一致，再冻结该脚本哈希与 report SHA-256。哈希不一致时该次执行无效，需用稳定版本重跑。
 - report、脚本、Case/Expected 标识必须能相互映射。脚本有任何修改，重新执行并生成新的哈希和报告。
+- 若 Planning 对 Expected 要求 `kind=runner_report`，该 Expected 的 `evidence_refs` 必须包含与 `automation_run.official_run.report_ref` 完全相同的官方 Runner JSON 报告；不能用另一个附件代替。
+- Planning 截图策略列出的每个 `expected_id` 都必须各自引用至少一张图像证据；中间检查点须在对应动作前后正确时序采集，不能拿最终截图反向证明此前状态。
 - UI Case 的录屏按 Case Evidence Plan 单独启停、命名和归档；多个 Case 共用的 Batch 录屏不能替代 Case 级录屏。
 - 每次自动化诊断失败，立即把当时的页面/DOM 或请求响应诊断片段、错误、脚本哈希存入对应 Case 的 `debug/`，并记录诊断前后状态。保留失败尝试与修复后尝试，不能覆盖失败证据。
 
@@ -134,6 +136,8 @@ Toast “保存成功”只能证明前端收到成功反馈。
 如果没有新证据，只是原样重试，不算诊断。
 
 ## 12. API Case
+
+API Case 通过项目公共 `framework/api-client.ts` 调用 Node 原生 `fetch`，不得在 Case 脚本里另写一套裸 `fetch` 客户端。每个请求都明确提供正数 timeout；Client 返回 method/url、status、解析后的 body、`durationMs`、服务关联 ID（没有时写 `null`）和内置脱敏的 `evidence` 对象。正式 Evidence 保存该对象，不得自行拼装未脱敏的请求/响应字段。
 
 保存：
 

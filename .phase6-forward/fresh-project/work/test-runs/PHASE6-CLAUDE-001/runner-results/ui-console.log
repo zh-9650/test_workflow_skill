@@ -1,0 +1,13 @@
+
+> test-workflow-automation@2.0.0 test:ui
+> playwright test --config playwright.config.ts --workers=1 ../test-runs/PHASE6-CLAUDE-001/scripts/ui/TC-P6-UI-001.spec.ts ../test-runs/PHASE6-CLAUDE-001/scripts/ui/TC-P6-UI-002.spec.ts
+
+
+Running 2 tests using 1 worker
+
+(node:40340) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 ..\test-runs\PHASE6-CLAUDE-001\scripts\ui\TC-P6-UI-001.spec.ts:6:5 › TC-P6-UI-001 loads item and shows ready result (379ms)
+  ok 2 ..\test-runs\PHASE6-CLAUDE-001\scripts\ui\TC-P6-UI-002.spec.ts:6:5 › TC-P6-UI-002 critical item lookup shows ready result (295ms)
+
+  2 passed (1.5s)

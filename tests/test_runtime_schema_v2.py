@@ -168,3 +168,96 @@ def test_case_result_accepts_v2_schema_at_version_gate(tmp_path) -> None:
     result = contract.validate(plan_case, case_result, tmp_path)
 
     assert result == {"ok": True, "case_id": "TC-001", "status": "PASS"}
+
+
+def test_required_runner_report_must_be_the_official_report_for_each_expected(tmp_path) -> None:
+    contract = load_script(
+        "test-execution-runtime/scripts/execution_control.py",
+        "runner_report_expected_binding",
+    )
+    plan_case, case_result = _case_contract_payload(tmp_path)
+    report_ref = case_result["automation_run"]["official_run"]["report_ref"]
+    plan_case["evidence_plan"]["files"] = [
+        {"kind": "runner_report", "expected_ids": ["E1"]}
+    ]
+
+    with pytest.raises(AssertionError, match="must attach the official Runner report"):
+        contract.validate(plan_case, case_result, tmp_path)
+
+    case_result["expected_results"][0]["evidence_refs"].append(report_ref)
+    assert contract.validate(plan_case, case_result, tmp_path) == {
+        "ok": True,
+        "case_id": "TC-001",
+        "status": "PASS",
+    }
+
+
+def test_request_response_redaction_does_not_apply_to_unmodified_official_runner_report(tmp_path) -> None:
+    contract = load_script(
+        "test-execution-runtime/scripts/execution_control.py",
+        "request_response_runner_report_separation",
+    )
+    plan_case, case_result = _case_contract_payload(tmp_path)
+    api_ref = "evidence/B01/TC-001/api/request-response.json"
+    api_path = tmp_path / api_ref
+    api_path.parent.mkdir(parents=True)
+    api_path.write_text(json.dumps({"redacted": True, "request": {"method": "GET"}, "response": {"status": 200}}), encoding="utf-8")
+    report_ref = case_result["automation_run"]["official_run"]["report_ref"]
+    plan_case["evidence_plan"]["api"] = [
+        {"kind": "request_response", "expected_ids": ["E1"], "redacted": True}
+    ]
+    plan_case["evidence_plan"]["files"] = [
+        {"kind": "runner_report", "expected_ids": ["E1"]}
+    ]
+    case_result["expected_results"][0]["evidence_refs"] = [api_ref, report_ref]
+
+    assert contract.validate(plan_case, case_result, tmp_path) == {
+        "ok": True,
+        "case_id": "TC-001",
+        "status": "PASS",
+    }
+
+    case_result["expected_results"][0]["evidence_refs"] = [report_ref]
+    with pytest.raises(AssertionError, match="needs JSON request_response evidence separate from the official Runner report"):
+        contract.validate(plan_case, case_result, tmp_path)
+
+
+def test_planned_screenshot_is_required_for_every_mapped_expected(tmp_path) -> None:
+    contract = load_script(
+        "test-execution-runtime/scripts/execution_control.py",
+        "screenshot_expected_binding",
+    )
+    plan_case, case_result = _case_contract_payload(tmp_path)
+    second_evidence_ref = "evidence/B01/TC-001/second-expected.json"
+    second_evidence_path = tmp_path / second_evidence_ref
+    second_evidence_path.write_text('{"observed": true}', encoding="utf-8")
+    screenshot_ref = "evidence/B01/TC-001/checkpoint.png"
+    (tmp_path / screenshot_ref).write_bytes(b"image-evidence")
+    plan_case["expected_results"].append(
+        {"id": "E2", "expected": "the second result is observed"}
+    )
+    plan_case["evidence_plan"]["screenshots"] = [
+        {"kind": "screenshot", "expected_ids": ["E1", "E2"]}
+    ]
+    case_result["expected_results"].append(
+        {
+            "id": "E2",
+            "actual": "the second result is observed",
+            "result": "pass",
+            "evidence_refs": [second_evidence_ref],
+        }
+    )
+
+    with pytest.raises(AssertionError, match="screenshot for Expected E1"):
+        contract.validate(plan_case, case_result, tmp_path)
+
+    case_result["expected_results"][0]["evidence_refs"].append(screenshot_ref)
+    with pytest.raises(AssertionError, match="screenshot for Expected E2"):
+        contract.validate(plan_case, case_result, tmp_path)
+
+    case_result["expected_results"][1]["evidence_refs"].append(screenshot_ref)
+    assert contract.validate(plan_case, case_result, tmp_path) == {
+        "ok": True,
+        "case_id": "TC-001",
+        "status": "PASS",
+    }

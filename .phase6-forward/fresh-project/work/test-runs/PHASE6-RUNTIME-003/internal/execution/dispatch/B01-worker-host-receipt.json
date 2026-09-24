@@ -1,0 +1,9 @@
+{
+  "agent_role": "execution_worker",
+  "agent_session_id": "/root/phase6_runtime_worker_b01",
+  "dispatch_source": "codex_subagent_tool",
+  "host_dispatch_ref": "/root/phase6_runtime_worker_b01",
+  "task_id": "B01-de185389eea1",
+  "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+  "started_at": "2026-09-23T13:58:24Z"
+}

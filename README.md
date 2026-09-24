@@ -1,10 +1,8 @@
 # 测试 Skill
 
-这套 Skill 正按 [`新版测试Skill改造计划.md`](新版测试Skill改造计划.md) 升级。项目接入先完成一次 Bootstrap；每个测试 Run 再按 9 个阶段 Skill 流转。
+这套 Skill 按已经确认的“前半程改造指导 + 后半程改造指导”实施，目标是让 AI 更接近真实资深测试人员的工作方式，而不是继续扩展工作流框架。
 
 ```text
-项目 Bootstrap（首次接入或版本漂移时）
-→ 读取项目测试索引
 业务理解
 → AI 自审
 → 人工确认
@@ -26,11 +24,7 @@
 → 最终结果复核
 ```
 
-## 1 个项目 Bootstrap + 9 个 Run Skill
-
-`test-project-bootstrap`：仅管理指定项目的测试入口托管区块、项目测试索引/Profile、Claude Worker/Reviewer 定义和 TypeScript 公共骨架，不写 Run 阶段状态。
-
-Run 内依次使用：
+## 9 个 Skill
 
 1. `clarify-before-testing`：Run / 阶段 / 确认 / 恢复路由
 2. `test-business-modeling`：业务理解
@@ -49,8 +43,6 @@ Run 内依次使用：
 - 人工确认由 Router 的版本绑定记录，不依赖各阶段 JSON 自报 `confirmed=true`。
 - 已确认 Case 是 Planning 的事实源；Planning 不能改步骤、Expected、测试目标和测试数据语义。
 - UI/API 主执行方式由 Planning 决定，Runtime 与 Regression 都不能偷换。
-- API 自动化固定使用 TypeScript + Vitest + Node 原生 fetch；UI 自动化固定使用 TypeScript + Playwright Test。首次执行也先写脚本，再正式运行最终脚本。
-- 主 Agent 只编排 Batch：实际派独立 Execution Worker，Worker 完成并自审后再派新的 Result Reviewer；缺少子 Agent 能力时停止，不自演。
 - Case 结果按 `Expected → Actual → Evidence → Result` 判断；脚本成功不等于 PASS。
 - Evidence 必须属于当前 Run / Batch / Case，不能拿任意旧文件或 Run 外文件充数。
 - 技术执行错误不等于产品 FAIL。
@@ -64,6 +56,6 @@ Run 内依次使用：
 
 ## 最终包结构
 
-发布包包含 1 个项目 Bootstrap Skill 与 9 个 Run Skill。当前仓库的计划与 `tests/` 是开发和验收资料，不属于目标项目的测试数据；缓存文件和旧执行兼容层不应进入发布包。
+根目录只保留本 README 与 9 个 Skill 目录，不携带开发过程审查报告、历史测试目录、缓存文件或旧兼容层。
 
 工程 Contract 用来拦关键旁路，但 Skill 是否可用仍应以真实前向流程验证为准：正常主流程、局部补测、产品 Bug 与影响回归、中断恢复、最终关闭等。

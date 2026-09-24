@@ -74,6 +74,19 @@ def desired_claude(text: str, block: str) -> str:
 
 def safe_destination(project: Path, relative: str) -> Path:
     dest = project / relative
+    current = project
+    parts = Path(relative).parts
+    for index, part in enumerate(parts):
+        current = current / part
+        is_junction = getattr(current, "is_junction", None)
+        if current.is_symlink() or (callable(is_junction) and is_junction()):
+            raise ValueError(
+                f"managed path contains a symlink or junction: {relative}"
+            )
+        if index < len(parts) - 1 and current.exists() and not current.is_dir():
+            raise ValueError(
+                f"managed path has a non-directory parent: {relative}"
+            )
     try:
         dest.resolve().relative_to(project.resolve())
     except ValueError as exc:
@@ -195,6 +208,94 @@ def managed_assets() -> dict[str, Path]:
     return result
 
 
+def check_managed_asset_conflicts(
+    project: Path, assets: dict[str, Path], old_profile: dict | None
+) -> None:
+    previously_managed = (
+        old_profile.get("managed_files_sha256", {})
+        if isinstance(old_profile, dict)
+        else {}
+    )
+    for relative, asset in assets.items():
+        dest = safe_destination(project, relative)
+        if dest.is_symlink():
+            raise ValueError(
+                f"refusing to replace a symlink at a managed project path: {relative}"
+            )
+        if not dest.exists():
+            continue
+        if not dest.is_file():
+            raise ValueError(
+                f"refusing to replace a non-file at a managed project path: {relative}"
+            )
+        current_hash = sha256_file(dest)
+        desired_hash = sha256_file(asset)
+        prior_hash = previously_managed.get(relative)
+        if current_hash in {desired_hash, prior_hash}:
+            continue
+        raise ValueError(
+            "refusing to overwrite an existing unmanaged or locally modified "
+            f"project file: {relative}; preserve or move it, then rerun Bootstrap"
+        )
+
+
+def check_metadata_conflicts(
+    index_path: Path,
+    profile_path: Path,
+    old_profile: dict | None,
+) -> None:
+    if profile_path.is_symlink() or index_path.is_symlink():
+        raise ValueError("refusing to replace a symlink at a managed .test-workflow path")
+    if profile_path.exists():
+        if not profile_path.is_file() or not isinstance(old_profile, dict):
+            raise ValueError(
+                "refusing to overwrite an existing unmanaged project file: "
+                ".test-workflow/project-profile.json"
+            )
+        hash_pattern = re.compile(r"^[0-9a-f]{64}$")
+        managed_hashes = old_profile.get("managed_files_sha256")
+        owner_marker = old_profile.get("managed_by")
+        profile_is_managed = (
+            owner_marker == "test-project-bootstrap"
+            and bool(managed_hashes)
+            and isinstance(old_profile.get("source_hashes"), dict)
+            and bool(old_profile.get("source_hashes"))
+            and isinstance(old_profile.get("workflow_version"), str)
+            and bool(old_profile.get("workflow_version"))
+            and isinstance(old_profile.get("managed_block_sha256"), str)
+            and hash_pattern.fullmatch(old_profile["managed_block_sha256"]) is not None
+            and isinstance(old_profile.get("index_sha256"), str)
+            and hash_pattern.fullmatch(old_profile["index_sha256"]) is not None
+            and isinstance(managed_hashes, dict)
+            and all(
+                isinstance(path, str)
+                and isinstance(digest, str)
+                and hash_pattern.fullmatch(digest) is not None
+                for path, digest in managed_hashes.items()
+            )
+            and isinstance(old_profile.get("source_hashes"), dict)
+            and isinstance(old_profile.get("updated_at"), str)
+            and bool(old_profile.get("updated_at"))
+        )
+        if not profile_is_managed:
+            raise ValueError(
+                "refusing to overwrite an unrecognized Bootstrap profile: "
+                ".test-workflow/project-profile.json"
+            )
+    if index_path.exists():
+        if not index_path.is_file():
+            raise ValueError(
+                "refusing to overwrite a non-file at a managed project path: "
+                ".test-workflow/PROJECT_TESTING_INDEX.md"
+            )
+        recorded_hash = old_profile.get("index_sha256") if isinstance(old_profile, dict) else None
+        if not recorded_hash or sha256_file(index_path) != recorded_hash:
+            raise ValueError(
+                "refusing to overwrite an unmanaged or locally modified project file: "
+                ".test-workflow/PROJECT_TESTING_INDEX.md"
+            )
+
+
 def bootstrap(project_root: str | Path, check: bool = False) -> dict:
     project = Path(project_root).resolve()
     if not project.is_dir():
@@ -202,6 +303,8 @@ def bootstrap(project_root: str | Path, check: bool = False) -> dict:
     claude_path = safe_destination(project, "CLAUDE.md")
     profile_path = safe_destination(project, ".test-workflow/project-profile.json")
     index_path = safe_destination(project, ".test-workflow/PROJECT_TESTING_INDEX.md")
+    if claude_path.exists() and not claude_path.is_file():
+        raise ValueError("refusing to replace a non-file at managed project path: CLAUDE.md")
     claude_text = claude_path.read_text(encoding="utf-8") if claude_path.exists() else ""
     outside, actual_block = managed_parts(claude_text)
     del outside
@@ -219,6 +322,10 @@ def bootstrap(project_root: str | Path, check: bool = False) -> dict:
     hashes = source_hashes(project, claude_text, files)
     assets = managed_assets()
     managed_hashes = {relative: sha256_file(asset) for relative, asset in assets.items()}
+    # Preflight every destination before writing CLAUDE.md, an asset, or profile.
+    # Existing user files must never be silently replaced, including on upgrades.
+    check_managed_asset_conflicts(project, assets, old_profile)
+    check_metadata_conflicts(index_path, profile_path, old_profile)
     asset_stale = (
         not isinstance(old_profile, dict)
         or old_profile.get("managed_files_sha256") != managed_hashes
@@ -246,6 +353,7 @@ def bootstrap(project_root: str | Path, check: bool = False) -> dict:
         index = render_index(project, files, hashes, timestamp)
         write_if_changed(index_path, index.encode("utf-8"), check, changed, project)
         profile = {
+            "managed_by": "test-project-bootstrap",
             "workflow_version": WORKFLOW_VERSION,
             "managed_block_sha256": sha256_bytes(desired_block.encode("utf-8")),
             "index_sha256": sha256_bytes(index.encode("utf-8")),

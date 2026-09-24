@@ -9,6 +9,7 @@ body{font-family:Arial,sans-serif;max-width:1200px;margin:24px auto;padding:0 18
 <h1>测试执行进度</h1><div id="summary" class="cards"></div>
 <p id="current"></p><p class="muted" id="updated"></p>
 <h2>Batch 进度</h2><div id="batches"></div>
+<h2>Case 脚本与证据</h2><div id="cases"></div>
 <h2>核心流程</h2><div id="core"></div>
 <h2>规划执行方式 vs 实际执行方式</h2><div id="methods"></div>
 <h2>录屏状态</h2><div id="recordings"></div>
@@ -25,7 +26,8 @@ function render(d){
  document.getElementById('summary').innerHTML=`<div class="card"><b>Case 完成率</b><br>${done}/${total} (${total?Math.round(done*100/total):0}%)</div><div class="card"><b>Batch</b><br>${bd}/${bt}</div><div class="card"><b>PASS</b><br>${d.metrics?.PASS||0}</div><div class="card"><b>FAIL</b><br>${d.metrics?.FAIL||0}</div><div class="card"><b>BLOCKED</b><br>${d.metrics?.BLOCKED||0}</div>`;
  document.getElementById('current').innerHTML=`当前 Stage: <b>${esc(d.current_stage||'-')}</b> ｜ Batch: <b>${esc(d.current_batch||'-')}</b> ｜ Case: <b>${esc(d.current_case||'-')}</b> ｜ Worker: <b>${esc(d.current_worker||'-')}</b> ｜ Reviewer: <b>${esc(d.current_reviewer||'-')}</b> ｜ 动作: <b>${esc(d.current_action||'-')}</b>`;
  document.getElementById('updated').textContent='Last Updated: '+(d.last_updated||'-');
- document.getElementById('batches').innerHTML=table(['Batch','名称','状态','已处理/总数'],(d.batches||[]).map(b=>[b.id,b.name||'',b.status,`${b.done||0}/${b.total||0}`]));
+ document.getElementById('batches').innerHTML=table(['Batch','名称','状态','已处理/总数','Worker session / 回执 / 结果','Reviewer session / 回执 / 结果'],(d.batches||[]).map(b=>[b.id,b.name||'',b.status,`${b.done||0}/${b.total||0}`,`${b.worker_session_id||'-'} / ${b.worker_receipt_status||'-'} / ${b.worker_result_status?.overall||'-'}`,`${b.reviewer_session_id||'-'} / ${b.reviewer_receipt_status||'-'} / ${b.reviewer_result_status||'-'}`]));
+ document.getElementById('cases').innerHTML=table(['Case','Batch','状态','runner','脚本状态 / Hash','正式运行','证据数','录屏'],(d.cases||[]).map(c=>[c.id,c.batch_id,c.status,c.runner||c.planned_execution,`${c.script_status||'-'} / ${c.script_sha256||'-'}`,c.official_run_status||'-',c.evidence_count||0,c.recording_status||'not_required']));
  document.getElementById('core').innerHTML=table(['流程','名称','状态','进度'],(d.core_flows||[]).map(f=>[f.id||'',f.name||'',f.status||'',`${f.done||0}/${f.total||0}`]));
  const pm=d.metrics?.planned_execution||{}, am=d.metrics?.actual_execution||{};
  document.getElementById('methods').innerHTML=table(['方式','规划','实际已完成'],['UI','API','人工'].map(k=>[k,pm[k]||0,am[k]||0]));

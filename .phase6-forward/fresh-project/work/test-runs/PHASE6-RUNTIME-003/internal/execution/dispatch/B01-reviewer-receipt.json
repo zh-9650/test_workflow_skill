@@ -1,0 +1,16 @@
+{
+  "agent_role": "result_reviewer",
+  "agent_session_id": "/root/phase6_result_reviewer_b01",
+  "dispatch_source": "codex_subagent_tool",
+  "host_dispatch_ref": "/root/phase6_result_reviewer_b01",
+  "task_id": "B01-reviewer-001",
+  "task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d",
+  "started_at": "2026-09-23T14:09:58Z",
+  "accepted_at": "2026-09-23T14:10:05.599596+00:00",
+  "receipt_status": "completed",
+  "finished_at": "2026-09-23T14:12:42.869178+00:00",
+  "result_status": "passed",
+  "outputs": {
+    "internal/execution/results/B01-reviewer-results.json": "dbcfa06582bf306ed003eb149ce2ea565bb6bd22914ca52b856d9666a0bd59b6"
+  }
+}

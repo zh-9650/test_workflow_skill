@@ -36,7 +36,7 @@ Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同
 
 进入目标项目前，先检查 `test-project-bootstrap` 的项目 Profile、工作流版本和 `CLAUDE.md` 测试托管区块。缺失或漂移时先完成项目级 Bootstrap，再发现或创建 Run。Bootstrap 不写 `current_stage`，普通 Run 恢复不重复初始化。目标项目若尚未经用户授权，不运行 Bootstrap 修改该项目。
 
-正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。Worker 自审后必须派新会话的 Result Reviewer；子 Agent 不可用时停在明确等待/阻塞状态，不能由主 Agent代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
+正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。若 Router 输出 `execute_parallel_batches(batch_ids)`，仅可为所列且已分别绑定数据的 `parallel_safe` Batch 启动独立 Runtime；所有 Batch 必须无跨 Batch 未满足依赖、Data Manifest 对象引用互不重叠。每个 Batch 各派 Worker，Worker 自审后再派该 Batch 的新会话 Reviewer；不可跨 Batch 合并角色。子 Agent 不可用时停在明确等待/阻塞状态，不能由主 Agent代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
 
 用户侧使用正常测试语言：
 
@@ -298,7 +298,7 @@ Run
      type: prepare_batch_data
      batch_id: B2
    ```
-   严禁跳过数据准备直接输出 `execute_batch`。只有当 B2 的 Data Manifest 在 `data-readiness` 阶段通过 `set-batch-data-ready` 验证并绑定后，`next_action` 才会变为 `execute_batch(B2)`。
+   严禁跳过数据准备直接输出 `execute_batch` 或 `execute_parallel_batches`。单 Batch 只有在对应 Manifest 通过 `set-batch-data-ready` 验证并绑定后可进入 Runtime。并行动作仅在至少两个 Batch 均 `parallel_safe=true`、各自绑定 Manifest、跨 Batch 依赖闭合且对象引用隔离时生成；Router 必须把 `batch_ids` 完整写入 `next_action`，Runtime 逐 Batch 核对绑定。
 
 2. **缺陷路由优先于结果复核**：
    只要存在 Reviewer 确认但尚未提交或关联 Bug 的产品 FAIL Case，严禁输出 `result_review` 或推进无关批次，权威动作必须是：
@@ -321,12 +321,14 @@ Run
    Regression PASS 后，原 FAIL 可进入 `PASS_AFTER_FIX`；因该缺陷而 BLOCKED 的 Case 只能进入待恢复队列。Router 必须按 Batch 给出：
    ```yaml
    next_action:
-     type: prepare_resumed_cases_data
+  type: prepare_resumed_cases_data
      batch_id: B2
      case_ids: [C07, C08]
      bug_ref: BUG-123
    ```
    这些 Case 重新通过 `data-readiness → execution-runtime → Worker 自审 → Reviewer` 后才算闭环。不能在回归事件中直接把它们改为 PASS。
+
+   若恢复执行仍被 Reviewer 确认为 BLOCKED，必须保留该 Case 的恢复队列与 `blocked_items`，并将 `next_action` 设为 `resolve_blocked_cases`。只有上游/环境条件实际解决后，Router 才能 transition 回 `data-readiness` 并重新验证；pending Resume 不得被清除，也不得进入 Final Review。
 
 `current_stage` 只由 Router 的显式 transition 改变。Dashboard/Runtime/Defect 事件若声明了不同 Stage，必须拒绝，不能反向覆盖 Run Status。
 

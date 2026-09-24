@@ -17,6 +17,14 @@ def _confirmed_cases() -> dict:
                 "expected_results": [
                     {"id": "E1", "expected": "resource is returned"}
                 ],
+                "evidence_policy": {
+                    "level": "standard",
+                    "recording_required": False,
+                    "required": [
+                        {"kind": "request_response", "assertion_ids": ["E1"], "redacted": True},
+                        {"kind": "runner_report", "assertion_ids": ["E1"]},
+                    ],
+                },
                 "target_action": "call resource endpoint",
                 "test_point_ids": ["TP-001"],
                 "preconditions": [],
@@ -50,7 +58,7 @@ def _plan(schema_version=2) -> dict:
                 "recording": False,
                 "api": [{"kind": "request_response", "expected_ids": ["E1"], "redacted": True}],
                 "network": [],
-                "files": [],
+                "files": [{"kind": "runner_report", "expected_ids": ["E1"]}],
                 "read_back_required": False,
             },
         }
@@ -175,6 +183,14 @@ def _ui_plan(level="standard", recording=False, screenshots=None):
     source["title"] = "submit through the page"
     source["steps"] = ["fill and submit the page"]
     source["target_action"] = "submit the page"
+    source["evidence_policy"] = {
+        "level": level,
+        "recording_required": level == "critical",
+        "required": [
+            {"kind": "screenshot", "assertion_ids": ["E1"]},
+            {"kind": "runner_report", "assertion_ids": ["E1"]},
+        ],
+    }
     case = deepcopy(source)
     case.update({
         "batch_id": "B01",
@@ -194,7 +210,7 @@ def _ui_plan(level="standard", recording=False, screenshots=None):
             "level": level,
             "screenshots": screenshots if screenshots is not None else [{"kind": "screenshot", "expected_ids": ["E1"]}],
             "recording": recording,
-            "api": [], "network": [], "files": [],
+            "api": [], "network": [], "files": [{"kind": "runner_report", "expected_ids": ["E1"]}],
         },
     })
     plan = _plan()
@@ -222,6 +238,23 @@ def test_critical_ui_requires_recording_and_expected_bound_screenshot() -> None:
         contract.validate(plan, confirmed_cases=confirmed)
 
 
+def test_execution_plan_cannot_weaken_confirmed_evidence_policy() -> None:
+    contract = load_script(
+        "test-execution-planning/scripts/execution_plan.py",
+        "phase2_confirmed_evidence_policy",
+    )
+    plan, confirmed = _ui_plan(level="critical", recording=True)
+    plan["cases"][0]["evidence_plan"]["level"] = "standard"
+    plan["cases"][0]["evidence_plan"]["recording"] = False
+    with pytest.raises(AssertionError, match="evidence level"):
+        contract.validate(plan, confirmed_cases=confirmed)
+
+    plan = _plan()
+    plan["cases"][0]["evidence_plan"]["files"] = []
+    with pytest.raises(AssertionError, match="runner_report"):
+        _validate(plan)
+
+
 def test_manual_case_requires_explicit_human_steps_and_result_entry() -> None:
     contract = load_script(
         "test-execution-planning/scripts/execution_plan.py",
@@ -236,7 +269,14 @@ def test_manual_case_requires_explicit_human_steps_and_result_entry() -> None:
         "steps": ["request approval", "record the decision"],
         "result_entry": "enter Actual and evidence in the Run result ledger",
     }
-    assert contract.validate(plan, confirmed_cases=_confirmed_cases())["ok"] is True
+    with pytest.raises(AssertionError, match="manual Case cannot require"):
+        contract.validate(plan, confirmed_cases=_confirmed_cases())
+    confirmed = _confirmed_cases()
+    confirmed["cases"][0]["evidence_policy"]["required"] = [
+        {"kind": "file", "assertion_ids": ["E1"]}
+    ]
+    case["evidence_plan"]["files"] = [{"kind": "file", "expected_ids": ["E1"]}]
+    assert contract.validate(plan, confirmed_cases=confirmed)["ok"] is True
     case["manual_execution"].pop("result_entry")
     with pytest.raises(AssertionError, match="result_entry"):
         contract.validate(plan, confirmed_cases=_confirmed_cases())

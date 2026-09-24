@@ -234,8 +234,12 @@ final_result: PASS_AFTER_FIX
 Regression 仍必须：
 
 - 使用新的 Regression Worker；
+- Regression Runtime 必须由 Router/主 Agent通过 Runtime `regression-prepare` 创建正式 Task，再派独立 Worker、自审后派全新 Reviewer；禁止用 `worker_is_new` 等自报布尔值证明角色隔离；
 - 保留原主执行方式；
 - 完整覆盖原失败 Case + 已确定影响范围；
+- Regression Contract 的 `runtime_evidence` 必须绑定当前 Run 中每个实际 Regression Runtime Task、Case 范围及 Worker/Reviewer receipts；Final Review 会重新核验脚本、结果、会话身份和复核输出；
 - 整个 Regression Task 全部 PASS 后才允许写入 `PASS_AFTER_FIX` / PASS。
+
+同一个 Regression 跨多个 Batch 时，每个 Batch 分别生成 Runtime Task，并通过相同的 `regression_id` 关联；某个 Batch 仅含影响 Case 时不必伪造初始 FAIL，但 Run 中必须有同一 Bug 关联的 Reviewer-confirmed 初始 FAIL。Regression Reviewer 要求局部重测时必须保留 `product_regression` 模式和 Bug/Regression 标识；结果未通过 Reviewer 前不得更改 Case Ledger。
 
 Regression PASS 只更新本次 Regression Task 中实际执行且通过的原失败/影响 Case。因 Bug 而 BLOCKED、但未包含在 Regression Task 中的下游 Case，只能解除阻塞并进入恢复队列；Router 随后按 Batch 路由到 `data-readiness`，Runtime 重新执行并复核这些 Case。禁止把“依赖已修复”直接等同于“下游 Case 已通过”。

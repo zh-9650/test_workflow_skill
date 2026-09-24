@@ -1,4 +1,4 @@
-import argparse, hashlib, json, runpy
+import argparse, hashlib, importlib.util, json, runpy
 from pathlib import Path
 import re
 from pathlib import PurePosixPath
@@ -149,10 +149,29 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
         if 'recording' not in ep or not isinstance(ep['recording'],bool): fail(f'{cid}.evidence_plan.recording','case-level boolean required; Batch recording is not supported')
         if main=='UI' and not ep['screenshots']: fail(f'{cid}.evidence_plan.screenshots','UI Case requires a key assertion screenshot mapped to an Expected')
         if main=='UI' and level=='critical' and ep['recording'] is not True: fail(f'{cid}.evidence_plan.recording','critical UI Case requires case-level recording')
+        policy=confirmed_by[cid].get('evidence_policy')
+        if not isinstance(policy,dict): fail(f'{cid}.evidence_policy','confirmed machine-readable policy required')
+        if main=='人工' and any(item.get('kind')=='runner_report' for item in policy.get('required',[])):
+            fail(f'{cid}.evidence_policy','manual Case cannot require an automated runner_report')
+        if level!=policy.get('level'): fail(f'{cid}.evidence_plan.level','must preserve the confirmed Case evidence level')
+        if ep['recording'] is not policy.get('recording_required'):
+            fail(f'{cid}.evidence_plan.recording','must preserve the confirmed Case recording requirement')
+        evidence_fields={'screenshot':'screenshots','request_response':'api','read_back':'api','network':'network','file':'files','runner_report':'files'}
+        for required in policy.get('required',[]):
+            field=evidence_fields.get(required.get('kind'))
+            if not field: fail(f'{cid}.evidence_policy.required','unsupported required evidence kind '+str(required.get('kind')))
+            matched=[item for item in ep[field] if item.get('kind')==required['kind']]
+            required_ids=set(required['assertion_ids'])
+            if not any(required_ids<=set(item.get('expected_ids',[])) for item in matched):
+                fail(f'{cid}.evidence_plan.{field}',f"missing confirmed {required['kind']} evidence for {sorted(required_ids)}")
+            if required.get('redacted') is True and not any(item.get('redacted') is True and required_ids<=set(item.get('expected_ids',[])) for item in matched):
+                fail(f'{cid}.evidence_plan.{field}','confirmed redaction requirement is not preserved')
         if main=='API':
             api_kinds={item['kind'] for item in ep['api']}
             if 'request_response' not in api_kinds: fail(f'{cid}.evidence_plan.api','API Case requires redacted request_response evidence')
             if 'read_back_required' not in ep or not isinstance(ep['read_back_required'],bool): fail(f'{cid}.evidence_plan.read_back_required','explicit boolean decision required')
+            if any(item.get('kind')=='read_back' for item in policy.get('required',[])) and ep['read_back_required'] is not True:
+                fail(f'{cid}.evidence_plan.read_back_required','confirmed Case evidence policy requires read_back')
             if ep['read_back_required'] and 'read_back' not in api_kinds: fail(f'{cid}.evidence_plan.api','required read_back evidence is missing')
         if c.get('downloads_file') is True and not ep['files']: fail(f'{cid}.evidence_plan.files','download case requires files evidence')
 
@@ -186,5 +205,14 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
 
 if __name__=='__main__':
     a=argparse.ArgumentParser(); a.add_argument('--input',required=True); a.add_argument('--confirmed-cases',required=True); a.add_argument('--allow-waiting-confirmation',action='store_true'); x=a.parse_args()
-    cp=Path(x.confirmed_cases); confirmed=json.loads(cp.read_text(encoding='utf-8'))
+    cp=Path(x.confirmed_cases).resolve(); confirmed_design=json.loads(cp.read_text(encoding='utf-8'))
+    run_dir=cp.parents[2]
+    business_path=run_dir/'internal/business/business-model.json'; points_path=run_dir/'internal/design/test-points.json'
+    if not business_path.is_file() or not points_path.is_file():
+        fail('confirmed_cases','Run-bound business model and test-point contracts are required for Case projection')
+    root=Path(__file__).resolve().parents[2]
+    spec=importlib.util.spec_from_file_location('planning_case_contract',root/'test-case-design/scripts/case_contract.py')
+    case_contract=importlib.util.module_from_spec(spec); spec.loader.exec_module(case_contract)
+    case_contract.validate(confirmed_design,json.loads(points_path.read_text(encoding='utf-8')),json.loads(business_path.read_text(encoding='utf-8')),require_confirmed=not x.allow_waiting_confirmation)
+    confirmed={'cases':case_contract.project_execution_cases(confirmed_design)}
     print(json.dumps(validate(json.loads(Path(x.input).read_text(encoding='utf-8')),not x.allow_waiting_confirmation,confirmed,sha256(cp)),ensure_ascii=False))

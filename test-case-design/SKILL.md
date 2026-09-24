@@ -153,6 +153,8 @@ internal/design/test-cases.json
 
 例如一个长度规则可以是一个用例主项 + 多个执行数据组，而不是一个大用例里塞多个数据后只记录一个结果。
 
+Case Contract 2.0.0 是 Planning 的唯一来源：每个断言必须给出 `checkpoint`；`checkpoint=step` 或 `intermediate` 时还必须用 `step_id` 精确绑定步骤。每个模板还必须包含机器可读的 `evidence_policy`（等级、必需证据及其断言映射、是否必须录屏），证据类型只接受合同支持的枚举。Planning 会将每个执行数据组确定性投影为独立 Runtime Case，按该实例实际承接的断言过滤证据要求，并保留检查点、步骤引用和证据策略；禁止手工维护第二份顶层 `cases`。
+
 ---
 
 ## 5. 多个测试点何时允许共用一个用例主项

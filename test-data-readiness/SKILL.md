@@ -238,6 +238,8 @@ internal/data/manifests/Bxx-data-manifest.json
 - cleanup 策略；
 - read-back 结果。
 
+任何 `creation.implementation=script` 的 Builder 必须使用 TypeScript：API Builder 固定 `runner=vitest`，UI Builder 固定 `runner=playwright-test`。Builder 记录 `language`、`runner`、Run 内 `scripts/data/` 下的 `script_ref`、当前文件 `script_sha256`、验证环境/时间，以及验证样本 `verified_case_id`、`verified_object_ref` 和 `read_back_evidence_ref`。对象记录也必须有自己的 `read_back_evidence_ref`，指向 `evidence/<batch>/<case>/` 下的 JSON；除 `batch_id`、`case_id`、`object_ref` 和 `read_back_verified=true` 外，还要绑定原始响应/页面观察文件、正式 runner report、对应 Hash 和 `observed_via`。Contract 会重开所有文件并校验对象关联、脚本 Hash 与 runner report；只填布尔值不能代替 read-back 证据。
+
 详细方法：
 
 `references/data-builder-method.md`
@@ -251,7 +253,8 @@ Data Manifest 不能脱离 Execution Plan 单独宣布 ready。
 ```bash
 python test-data-readiness/scripts/data_manifest.py \
   --input <run>/internal/data/manifests/B01-data-manifest.json \
-  --plan <run>/internal/execution/execution-plan.json
+  --plan <run>/internal/execution/execution-plan.json \
+  --run-dir <run>
 ```
 
 独立校验成功还不等于 Runtime 已获准使用。必须由 Router 在 `data-readiness` 阶段把当前文件和当前已确认 Execution Plan 的摘要绑定到 Run：
@@ -272,3 +275,4 @@ python clarify-before-testing/scripts/workflow_state.py set-batch-data-ready \
 - 需要准备数据的 Case 都有对象映射；
 - Builder 的 `object_type` 与实际创建对象一致；
 - API/UI 创建入口与已经验证的 Builder 一致。
+- Builder 语言/runner 符合 API/UI 固定技术栈；脚本位于当前 Run、Hash 与文件一致，read-back Evidence 引用真实原始观察与 runner report，并对应 Batch/Case/对象及脚本 Hash。

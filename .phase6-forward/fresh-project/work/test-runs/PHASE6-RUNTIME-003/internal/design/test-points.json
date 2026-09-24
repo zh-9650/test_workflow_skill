@@ -1,0 +1,120 @@
+{
+  "schema_version": "1.0.0",
+  "design_version": "PHASE6-RUNTIME-003-test-points-fixture-baseline-1",
+  "business_model_version": "PHASE6-RUNTIME-003-fixture-baseline-1",
+  "design_questions": [],
+  "coverage_obligations": [
+    {
+      "coverage_id": "COV-API-ITEM-LOOKUP",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "Check the exact read-only API response for the fixture Item Lookup event.",
+      "source_model_refs": ["EV-API-ITEM-LOOKUP"],
+      "test_point_ids": ["TP-API-EXACT-ITEM"]
+    },
+    {
+      "coverage_id": "COV-UI-ITEM-LOOKUP",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "Check the visible result of the fixture UI Item Lookup event.",
+      "source_model_refs": ["EV-UI-ITEM-LOOKUP"],
+      "test_point_ids": ["TP-UI-VISIBLE-ITEM"]
+    },
+    {
+      "coverage_id": "COV-API-FAILURE-ATOMICITY-OUT-OF-SCOPE",
+      "type": "failure_atomicity",
+      "status": "out_of_scope",
+      "description": "The API event lists endpoint/response mismatch as a failure condition; business write atomicity is not applicable to this read-only fixture observation.",
+      "source_model_refs": ["EV-API-ITEM-LOOKUP"],
+      "reason": "No business data is written by the GET smoke. Endpoint availability or response mismatch must be classified using actual Runtime evidence and is not an atomicity assertion."
+    },
+    {
+      "coverage_id": "COV-UI-FAILURE-ATOMICITY-OUT-OF-SCOPE",
+      "type": "failure_atomicity",
+      "status": "out_of_scope",
+      "description": "The UI event lists missing controls/result mismatch as a failure condition; business write atomicity is not applicable to this read-only fixture observation.",
+      "source_model_refs": ["EV-UI-ITEM-LOOKUP"],
+      "reason": "The UI smoke makes no business write or persistence claim. Missing controls and visible-result mismatches are observations, not atomicity assertions."
+    }
+  ],
+  "test_points": [
+    {
+      "tp_id": "TP-API-EXACT-ITEM",
+      "priority": "P1",
+      "granularity": "atomic",
+      "module_id": "MOD-ITEM-LOOKUP",
+      "mechanism": "Send GET /api/items/1 to the isolated fixture and compare the HTTP status and complete JSON response, including the string type of id.",
+      "preconditions": [
+        "The fixture endpoint is available to the future formal Runtime run.",
+        "Use the frozen fixture baseline only; do not infer production data or business semantics."
+      ],
+      "affected_facts": [
+        "Fixture Item id = string \"1\"",
+        "Fixture Item name = \"Smoke item\"",
+        "Fixture Item status = \"ready\"",
+        "HTTP response status = 200"
+      ],
+      "core_expected": "GET /api/items/1 returns HTTP 200 and exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; id is a string.",
+      "must_not_change": [
+        "No fixture business data is mutated by this read-only lookup.",
+        "Do not assert persistence or real-product semantics from this response."
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": ["OBJ-FIXTURE-ITEM"],
+      "business_event_ids": ["EV-API-ITEM-LOOKUP"],
+      "primary_coverage_id": "COV-API-ITEM-LOOKUP",
+      "source_coverage_ids": ["COV-API-ITEM-LOOKUP"],
+      "source_refs": ["SRC-P6-ACCEPTANCE-001", "SRC-P6-FIXTURE-EVIDENCE-001"],
+      "source_status": "TEST_BASELINE"
+    },
+    {
+      "tp_id": "TP-UI-VISIBLE-ITEM",
+      "priority": "P1",
+      "granularity": "atomic",
+      "module_id": "MOD-ITEM-LOOKUP",
+      "mechanism": "In the isolated fixture UI, click the Load item button and assert that the visible #result text exactly matches the baseline.",
+      "preconditions": [
+        "The fixture page is available to the future formal Runtime run and exposes the Load item button.",
+        "Use the frozen fixture baseline only; no persistence claim is made."
+      ],
+      "affected_facts": [
+        "Visible #result text after the load action = \"Smoke item — ready\""
+      ],
+      "core_expected": "After clicking Load item, the visible #result text is exactly Smoke item — ready.",
+      "must_not_change": [
+        "No fixture business data is mutated by this read-only lookup.",
+        "Do not claim the result persists after refresh or a later session."
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": ["OBJ-FIXTURE-ITEM"],
+      "business_event_ids": ["EV-UI-ITEM-LOOKUP"],
+      "primary_coverage_id": "COV-UI-ITEM-LOOKUP",
+      "source_coverage_ids": ["COV-UI-ITEM-LOOKUP"],
+      "source_refs": ["SRC-P6-ACCEPTANCE-001", "SRC-P6-PROJECT-INDEX-001", "SRC-P6-FIXTURE-EVIDENCE-001"],
+      "source_status": "TEST_BASELINE",
+      "scope_note": "The critical UI Case is an evidence variant of this same visible-result point: it additionally checks the Item lookup heading and requires a key screenshot plus non-empty video. Those are Case/evidence requirements, not separate business behavior or persistence expectations."
+    }
+  ],
+  "granularity_review": {
+    "status": "passed",
+    "overbroad_point_ids": [],
+    "data_instance_split_groups": [],
+    "rationale": "The API response and UI visible result are distinct observable mechanisms and are split into atomic test points. The critical UI video/heading requirement is evidence and an additional assertion for the same UI event, not a separate business outcome."
+  },
+  "test_points_self_review": {
+    "status": "passed",
+    "coverage_accounted_for": true,
+    "review_boundary": "This self-review checks completeness and consistency against the fixture/test-baseline model only; it does not establish user confirmation or real-business correctness."
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    },
+    "main_document_ref": "deliverables/02-test-points.md",
+    "review_document_ref": "deliverables/02-test-point-review.md"
+  }
+}

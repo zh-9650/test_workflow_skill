@@ -1,0 +1,23 @@
+{
+  "index_sha256": "1513ae56896c55e2d1f8d4b8c6b27a5512972aee94ba09f24b9ba8e9b1469f47",
+  "managed_block_sha256": "6c82fcfd4e116a1ab1e60f6540f08662fe4271e78bf68b73ba8f6169cb320d0b",
+  "managed_files_sha256": {
+    ".claude/agents/test-execution-worker.md": "cc3db92453a82bf3a388cf44940b78aa35a12f8b62eaef46050cd71ba108a13f",
+    ".claude/agents/test-result-reviewer.md": "26a6fecab3def82a6a8698b9bda21643d55e3a11dfd7f1d793918abf4cc97c73",
+    "work/test-automation/framework/api-client.ts": "0019c974232bdbce7f482a94b3a3366a2a7e844569bd067ef2fa8ee183f062f1",
+    "work/test-automation/framework/evidence.ts": "42a51d728bbd0a3d7807559d8b7d008c30fc17c5a04cfdb94fc1d6558222d603",
+    "work/test-automation/framework/playwright.ts": "4c46c22a4f2527700b95f697ff6e3ff0664d344d60ee12107444e4ece6ae58a7",
+    "work/test-automation/framework/redaction.ts": "610a50e767bb9f69782d7975ef78e8df6c5d4f5fdc4d9463ab86f6967f9e9ab2",
+    "work/test-automation/framework/runtime-context.ts": "b9d63fa9c6f060a919c9a27255c4d6b00439e5aaef2f17a184a88658818b2031",
+    "work/test-automation/package-lock.json": "e02a90173ac333e86acd43891cf25a2b034439888c6a6af18eeaaf95c460457b",
+    "work/test-automation/package.json": "ae93501c1fc97cd93c418371a83032f29b8064947063a8aa9a55c885be696b99",
+    "work/test-automation/playwright.config.ts": "9a859dfab732dd8a45a714f8f75bbfb6cc2faf1ad76ee49b02cc14a46569074e",
+    "work/test-automation/tsconfig.json": "15d455ea21bf09ae8ac8dc666811fb64d7a58bd24b72cc625d579c0c8997291c",
+    "work/test-automation/vitest.config.ts": "997ba0c5bd626c2f2e7ffd74b4e867dec9e2f80f4751421a79c95b2ad5c50782"
+  },
+  "source_hashes": {
+    "CLAUDE.md (outside managed block)": "b6d69dfc132e17d197a5b1852cc1a72f023b490b25c3d8158b1a6e38e72ef519"
+  },
+  "updated_at": "2026-09-23T12:52:37.533493+00:00",
+  "workflow_version": "2.0.0"
+}

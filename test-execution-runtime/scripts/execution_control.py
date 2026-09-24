@@ -103,7 +103,7 @@ def _report_time(value,path):
 
 def _assert_secret_keys_redacted(value,path):
     sensitive_tokens={
-        'authorization','cookie','set_cookie','token','password','secret','apikey',
+        'authorization','auth','credential','credentials','cookie','set_cookie','token','password','secret','apikey',
         'session','email','phone','mobile','telephone','national','idcard','passport','ssn',
         'creditcard','cardnumber','bankaccount','accountnumber',
     }
@@ -114,6 +114,8 @@ def _assert_secret_keys_redacted(value,path):
                       'personal','refresh','work'}
     sensitive_value=re.compile(
         r'\bBearer\s+[A-Za-z0-9._~+/=-]{8,}|'
+        r'-----BEGIN ([A-Z0-9 ]*PRIVATE KEY)-----[\s\S]*?(?:-----END \1-----|$)|'
+        r'(?:^|[?&;\s])(?:[^=&#;\s]*(?:access[_-]?token|api[_-]?key|authorization|auth|credential|password|secret|session|token)[^=&#;\s]*)=([^&#;\s]+)|'
         r'\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b|'
         r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|'
         r'(?<!\d)(?:\+?86[-\s]?)?1[3-9]\d{9}(?!\d)',re.I
@@ -126,7 +128,7 @@ def _assert_secret_keys_redacted(value,path):
             joined='_'.join(re.findall(r'[a-z0-9]+',normalized_key))
             sensitive=bool(tokens & sensitive_tokens) or any(
                 f'_{field}_' in f'_{joined}_' for field in (
-                    'api_key','credit_card','card_number','bank_account','account_number',
+                    'api_key','access_key','private_key','secret_key','credit_card','card_number','bank_account','account_number',
                     'national_id','id_card',
                 )
             )
@@ -193,22 +195,38 @@ def _validate_automation_run(plan_case,result,evidence_root,rows_by_id):
     if result.get('status')=='FAIL' and report_state!='failed': fail(f'{cid}.status','product FAIL requires a failed official assertion for this Case')
 
     ep=plan_case.get('evidence_plan',{})
+    official_report=report_path.resolve()
     for item in ep.get('screenshots',[]):
-        eid=item.get('expected_ids',[])
-        refs=rows_by_id[eid[0]].get('evidence_refs',rows_by_id[eid[0]].get('evidence',[])) if eid else []
-        if not any(Path(str(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)).suffix.lower() in {'.png','.jpg','.jpeg','.webp'} for ref in refs):
-            fail(f'{cid}.evidence_plan.screenshots',f'expected a screenshot for Expected {eid}')
+        for eid in item.get('expected_ids',[]):
+            refs=rows_by_id[eid].get('evidence_refs',rows_by_id[eid].get('evidence',[]))
+            if not any(Path(str(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)).suffix.lower() in {'.png','.jpg','.jpeg','.webp'} for ref in refs):
+                fail(f'{cid}.evidence_plan.screenshots',f'expected a screenshot for Expected {eid}')
     for item in ep.get('api',[]):
         if item.get('kind') not in {'request_response','read_back'}: continue
         for eid in item.get('expected_ids',[]):
             refs=rows_by_id[eid].get('evidence_refs',rows_by_id[eid].get('evidence',[]))
             json_refs=[ref for ref in refs if Path(str(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)).suffix.lower()=='.json']
-            if not json_refs: fail(f'{cid}.evidence_plan.api',f'Expected {eid} needs JSON {item["kind"]} evidence')
+            api_refs=[]
             for ref in json_refs:
                 path=_evidence_path(ref,evidence_root)
+                if path.resolve()!=official_report:
+                    api_refs.append((ref,path))
+            if not api_refs: fail(f'{cid}.evidence_plan.api',f'Expected {eid} needs JSON {item["kind"]} evidence separate from the official Runner report')
+            for ref,path in api_refs:
                 try: payload=json.loads(path.read_text(encoding='utf-8'))
                 except (OSError,ValueError) as exc: fail(f'{cid}.evidence_plan.api',f'invalid JSON evidence: {exc}')
+                if item.get('kind')=='request_response' and (
+                    not isinstance(payload,dict) or payload.get('redacted') is not True
+                ):
+                    fail(f'{cid}.evidence_plan.api','request/response Evidence must assert redacted=true')
                 _assert_secret_keys_redacted(payload,str(path))
+    for item in ep.get('files',[]):
+        if item.get('kind')!='runner_report': continue
+        for eid in item.get('expected_ids',[]):
+            refs=rows_by_id[eid].get('evidence_refs',rows_by_id[eid].get('evidence',[]))
+            attached={_evidence_path(ref,evidence_root).resolve() for ref in refs}
+            if official_report not in attached:
+                fail(f'{cid}.evidence_plan.files',f'Expected {eid} must attach the official Runner report declared by automation_run.official_run.report_ref')
     if ep.get('recording') is True:
         video=result.get('recording_ref') or result.get('video_ref')
         video_path=_safe_run_file(video,f'{cid}.recording_ref',evidence_root,case_root)

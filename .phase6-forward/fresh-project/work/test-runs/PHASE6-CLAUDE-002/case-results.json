@@ -1,0 +1,67 @@
+{
+  "runId": "PHASE6-CLAUDE-002",
+  "batchId": "B01",
+  "workerRole": "test-execution-worker",
+  "fixtureBaseUrl": "http://127.0.0.1:41739",
+  "fixturePrecheck": "GET /api/items/1 -> HTTP 200 before formal runs",
+  "scriptSha256Record": "runner-results/script-sha256.txt",
+  "cases": [
+    {
+      "caseId": "TC-P6-API-001",
+      "stack": "TypeScript + Vitest + Node native fetch (shared framework/api-client.ts)",
+      "scriptPath": "work/test-runs/PHASE6-CLAUDE-002/scripts/api/TC-P6-API-001.test.ts",
+      "scriptSha256": "46b3ae7283ad94fafbec4469cbcaefa03571fbbd2956b506eafb01b0530ce491",
+      "expected": "GET /api/items/1 returns HTTP 200 and exact JSON {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; typeof id === 'string' asserted with toBe (no loose coercion).",
+      "actual": "Formal Vitest run: 1 test passed (status=passed in vitest-report.json). Response status 200; body deep-equals the exact object; typeof body.id toBe('string') passed.",
+      "formalReport": "work/test-runs/PHASE6-CLAUDE-002/runner-results/vitest-report.json",
+      "formalRunLog": "work/test-runs/PHASE6-CLAUDE-002/runner-results/api-formal-run.log",
+      "evidence": [
+        "work/test-runs/PHASE6-CLAUDE-002/evidence/B01/TC-P6-API-001/request-response.json"
+      ],
+      "evidenceNotes": "Artifact is redacted:true; request/response JSON shows status 200 and exact body; no sensitive headers present.",
+      "verdict": "PASS",
+      "reason": "Formal Vitest report shows the single test passed with HTTP 200, exact JSON equality, and strict string-type assertion on id."
+    },
+    {
+      "caseId": "TC-P6-UI-001",
+      "stack": "TypeScript + Playwright Test",
+      "scriptPath": "work/test-runs/PHASE6-CLAUDE-002/scripts/ui/TC-P6-UI-001.spec.ts",
+      "scriptSha256": "f69ddb3e2925fc819fa566aa7b20126e8d3444721db6920599ddc1c6f2fa6a92",
+      "expected": "Click button 'Load item'; visible #result text equals 'Smoke item — ready' (em dash U+2014).",
+      "actual": "Formal Playwright run: spec status=passed. After click, #result was visible and toHaveText('Smoke item — ready') matched (script bytes contain U+2014 \\xe2\\x80\\x94). Screenshot captured after the assertion.",
+      "formalReport": "work/test-runs/PHASE6-CLAUDE-002/runner-results/playwright-report.json",
+      "formalRunLog": "work/test-runs/PHASE6-CLAUDE-002/runner-results/ui-formal-run.log",
+      "evidence": [
+        "work/test-runs/PHASE6-CLAUDE-002/evidence/B01/TC-P6-UI-001/result.png"
+      ],
+      "evidenceNotes": "result.png is 8023 bytes, byte-identical (sha256 e343081b054f2090c678dbb62c5798699cf8747138f0ff015fce8ab2c117c60b) to TC-P6-UI-002/after-click.png; both were visually confirmed to show 'Smoke item — ready'.",
+      "verdict": "PASS",
+      "reason": "Formal Playwright report shows the spec passed and the post-click screenshot shows the expected ready text."
+    },
+    {
+      "caseId": "TC-P6-UI-002",
+      "stack": "TypeScript + Playwright Test (critical), video recording explicitly enabled via test.use({ video: 'on' })",
+      "scriptPath": "work/test-runs/PHASE6-CLAUDE-002/scripts/ui/TC-P6-UI-002.spec.ts",
+      "scriptSha256": "a7bf09fe47d971f166480d9aa89b2660e92d3706e1d11f71d4ae717afb802a0e",
+      "expected": "Before click: heading 'Item lookup' is visible. After click 'Load item': visible #result equals 'Smoke item — ready'. No persistence claim.",
+      "actual": "Formal Playwright run: spec status=passed. Heading toBeVisible passed before click; after click toHaveText('Smoke item — ready') passed. Two distinct screenshot files were produced (different sha256 and content). Video file produced and copied to evidence; size 7645 bytes (>0) with valid WebM/EBML magic 0x1A45DFA3.",
+      "formalReport": "work/test-runs/PHASE6-CLAUDE-002/runner-results/playwright-report.json",
+      "formalRunLog": "work/test-runs/PHASE6-CLAUDE-002/runner-results/ui-formal-run.log",
+      "evidence": [
+        "work/test-runs/PHASE6-CLAUDE-002/evidence/B01/TC-P6-UI-002/before-click.png",
+        "work/test-runs/PHASE6-CLAUDE-002/evidence/B01/TC-P6-UI-002/after-click.png",
+        "work/test-runs/PHASE6-CLAUDE-002/evidence/B01/TC-P6-UI-002/video.webm"
+      ],
+      "evidenceNotes": "before-click.png (7635 bytes, sha256 9be5a1ec70197a92a89c12cb202413c25cf2d73aecc306f29345e9ce075e44d7) visually shows heading 'Item lookup' with #result 'Not loaded'; after-click.png (8023 bytes, sha256 e343081b054f2090c678dbb62c5798699cf8747138f0ff015fce8ab2c117c60b) shows '#result Smoke item — ready'. The two files are distinct. video.webm copied from runner-results/playwright-artifacts/PHASE6-CLAUDE-002-scripts--98d68-nd-ready-result-after-click/video.webm.",
+      "verdict": "PASS",
+      "reason": "Formal Playwright report shows the critical spec passed; distinct before/after screenshots and a non-empty recorded video are present as required."
+    }
+  ],
+  "notes": [
+    "All three final scripts were written to disk (final mtime 2026-09-23 22:23:13 +0800) before the first Case execution began (formal Vitest start log 22:23:42 +0800).",
+    "Static check: tsc --noEmit exit 0 (runner-results/typecheck.log is empty). An earlier static-check failure (import.meta under CJS module mode) was diagnosed and fixed by switching to the shared runtimeContext() env-driven pattern before any Case was executed; SHA-256 values were recomputed from the final scripts after that fix and re-verified identical after the formal runs.",
+    "Runner exit codes alone were not treated as PASS; verdicts are based on formal report content plus evidence inspection.",
+    "Playwright JSON report stats: expected=2, unexpected=0, flaky=0, skipped=0.",
+    "Vitest JSON report: numTotalTests=1, numPassedTests=1, numFailedTests=0."
+  ]
+}

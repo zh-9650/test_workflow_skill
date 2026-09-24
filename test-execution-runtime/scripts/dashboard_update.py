@@ -1,6 +1,7 @@
 import json, os
 from pathlib import Path
 from datetime import datetime, timezone
+from contextlib import contextmanager
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def read(path,default=None):
@@ -8,6 +9,24 @@ def read(path,default=None):
     return json.loads(p.read_text(encoding='utf-8')) if p.exists() else ({} if default is None else default)
 def write(path,v):
     p=Path(path); p.parent.mkdir(parents=True,exist_ok=True); t=p.with_suffix(p.suffix+'.tmp'); t.write_text(json.dumps(v,ensure_ascii=False,indent=2)+'\n',encoding='utf-8'); os.replace(t,p)
+
+@contextmanager
+def _run_event_lock(dashboard_path):
+    lock_path=Path(dashboard_path).with_name('.dashboard-event.lock')
+    lock_path.parent.mkdir(parents=True,exist_ok=True)
+    with lock_path.open('a+b') as stream:
+        if os.name=='nt':
+            import msvcrt
+            stream.seek(0,os.SEEK_END)
+            if stream.tell()==0: stream.write(b'0'); stream.flush()
+            stream.seek(0); msvcrt.locking(stream.fileno(),msvcrt.LK_LOCK,1)
+            try: yield
+            finally: stream.seek(0); msvcrt.locking(stream.fileno(),msvcrt.LK_UNLCK,1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(),fcntl.LOCK_EX)
+            try: yield
+            finally: fcntl.flock(stream.fileno(),fcntl.LOCK_UN)
 
 def _recording_required(case):
     r=(case.get('evidence_plan') or {}).get('recording')
@@ -28,9 +47,11 @@ def _normalize_core_flows(plan):
 def init_dashboard(plan=None):
     plan=plan or {}; batches=[]; cases=[]; recordings={}
     for b in plan.get('batches',[]):
-        batches.append({'id':b['id'],'name':b.get('name',b.get('goal','')),'status':'pending','done':0,'total':len(b.get('case_ids',[]))})
+        batches.append({'id':b['id'],'name':b.get('name',b.get('goal','')),'status':'pending','done':0,'total':len(b.get('case_ids',[])),'worker_session_id':None,'worker_receipt_status':'pending','worker_result_status':None,'reviewer_session_id':None,'reviewer_receipt_status':'pending','reviewer_result_status':None})
     for c in plan.get('cases',[]):
-        cases.append({'id':c['case_id'],'status':'PENDING','batch_id':c.get('batch_id'),'planned_execution':c.get('primary_execution'),'actual_execution':None,'core_flow_id':c.get('core_flow_id') or ('CORE' if c.get('core_flow') else None)})
+        automation=c.get('automation') or {}
+        recording_required=(c.get('evidence_plan') or {}).get('recording') is True
+        cases.append({'id':c['case_id'],'status':'PENDING','batch_id':c.get('batch_id'),'planned_execution':c.get('primary_execution'),'actual_execution':None,'runner':automation.get('runner'),'script_ref':automation.get('script_target'),'script_status':'pending','debug_attempt_count':0,'official_run_id':None,'official_run_status':'pending','script_sha256':None,'evidence_status':'pending','evidence_count':0,'recording_required':recording_required,'recording_status':'pending' if recording_required else 'not_required','core_flow_id':c.get('core_flow_id') or ('CORE' if c.get('core_flow') else None)})
         rec=(c.get('evidence_plan') or {}).get('recording')
         if isinstance(rec,dict) and rec.get('required') is True:
             scope=rec.get('scope','case')
@@ -82,19 +103,44 @@ def apply_event(d,event):
     if event.get('stage'): d['current_stage']=event['stage']
     if worker is not None: d['current_worker']=worker
     if typ=='batch_started': d['current_batch']=bid; d['current_case']=None; update_batch(d,bid,status='running')
-    elif typ=='worker_dispatched': d['current_batch']=bid; d['current_case']=None; d['current_worker']=worker; d['current_reviewer']=None; update_batch(d,bid,status='running')
-    elif typ=='reviewer_dispatched': d['current_batch']=bid; d['current_case']=None; d['current_worker']=None; d['current_reviewer']=event.get('reviewer_id'); d['reviewer_status'][bid]={'status':'reviewing','reviewer':event.get('reviewer_id')}
+    elif typ=='worker_dispatched':
+        d['current_batch']=bid; d['current_case']=None; d['current_worker']=worker; d['current_reviewer']=None
+        if event.get('retest'):
+            update_batch(d,bid,status='running',last_retest_worker_session_id=worker,last_retest_worker_receipt_status=event.get('receipt_status','dispatched'))
+        else:
+            update_batch(d,bid,status='running',worker_session_id=worker,worker_receipt_status=event.get('receipt_status','dispatched'))
+    elif typ=='worker_completed':
+        if event.get('retest'):
+            update_batch(d,bid,last_retest_worker_session_id=worker,last_retest_worker_receipt_status=event.get('receipt_status','completed'),last_retest_worker_result_status=event.get('result_status'))
+        else:
+            update_batch(d,bid,worker_session_id=worker,worker_receipt_status=event.get('receipt_status','completed'),worker_result_status=event.get('result_status'))
+    elif typ=='reviewer_dispatched':
+        reviewer=event.get('reviewer_id'); d['current_batch']=bid; d['current_case']=None; d['current_worker']=None; d['current_reviewer']=reviewer
+        if event.get('retest'):
+            update_batch(d,bid,last_retest_reviewer_session_id=reviewer,last_retest_reviewer_receipt_status=event.get('receipt_status','dispatched'))
+        else:
+            update_batch(d,bid,reviewer_session_id=reviewer,reviewer_receipt_status=event.get('receipt_status','dispatched'))
+        d['reviewer_status'][bid]={'status':'reviewing','reviewer':reviewer}
     elif typ=='case_started': d['current_batch']=bid; d['current_case']=cid; upsert_case(d,cid,status='RUNNING',batch_id=bid)
     elif typ=='case_finished':
         upsert_case(d,cid,status=event['status'],batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
+        if event.get('automation_summary') is not None: upsert_case(d,cid,**event['automation_summary'])
+        if event.get('recording_status') is not None:
+            upsert_case(d,cid,recording_status=event['recording_status'])
+            if cid in d.get('recordings',{}): d['recordings'][cid]['status']=event['recording_status']
         if d.get('current_case')==cid: d['current_case']=None
     elif typ=='case_blocked':
         upsert_case(d,cid,status='BLOCKED',batch_id=bid,blocked_reason_type=event.get('blocked_reason_type'),actual_execution=event.get('actual_execution'))
         if d.get('current_case')==cid: d['current_case']=None
     elif typ=='review_started':
         d['current_case']=None; d['current_worker']=None; d['current_reviewer']=event.get('reviewer_id'); d['reviewer_status'][bid]={'status':'reviewing','reviewer':event.get('reviewer_id')}
+        if event.get('retest'): update_batch(d,bid,last_retest_reviewer_session_id=event.get('reviewer_id'))
     elif typ=='review_finished':
         reviewer_id=event.get('reviewer_id'); d['reviewer_status'][bid]={'status':event.get('status'),'reviewer':reviewer_id,'retest_case_ids':event.get('retest_case_ids',[])}
+        if event.get('retest'):
+            update_batch(d,bid,last_retest_reviewer_session_id=reviewer_id,last_retest_reviewer_receipt_status=event.get('reviewer_receipt_status','completed'),last_retest_reviewer_result_status=event.get('reviewer_result_status',event.get('status')))
+        else:
+            update_batch(d,bid,reviewer_session_id=reviewer_id,reviewer_receipt_status=event.get('reviewer_receipt_status','completed'),reviewer_result_status=event.get('reviewer_result_status',event.get('status')))
         d['current_case']=None; d['current_worker']=None; d['current_reviewer']=None
         if event.get('status')=='passed': update_batch(d,bid,status='completed')
         elif event.get('status')=='rework_required': update_batch(d,bid,status='needs_rework')
@@ -189,14 +235,21 @@ def _queue_unblocked_cases(s,d,event):
             if cid not in item['case_ids']: item['case_ids'].append(cid)
         if not item.get('bug_ref'): item['bug_ref']=event.get('bug_ref')
 
-def _finish_resume_batch(s,batch_id):
+def _finish_resume_batch(s,d,batch_id):
     queue=s.get('pending_resume_batches',[])
-    if any(x.get('batch_id')==batch_id for x in queue):
+    matching=[x for x in queue if x.get('batch_id')==batch_id]
+    if matching:
+        resumed={cid for item in matching for cid in item.get('case_ids',[])}
+        cases={c.get('id'):c for c in d.get('cases',[])}
+        unresolved=[cid for cid in resumed if cases.get(cid,{}).get('status') in {'BLOCKED','PENDING','RUNNING'}]
+        if unresolved:
+            return {'completed':False,'unresolved_case_ids':sorted(unresolved)}
         s['pending_resume_batches']=[x for x in queue if x.get('batch_id')!=batch_id]
+        s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('case_id') not in resumed]
         if isinstance(s.get('pending_resume'),dict) and s['pending_resume'].get('batch_id')==batch_id:
             s['pending_resume']=None
-        return True
-    return False
+        return {'completed':True,'unresolved_case_ids':[]}
+    return {'completed':False,'unresolved_case_ids':[]}
 
 def _unhandled_fail_cases(s,d):
     covered=set()
@@ -231,7 +284,7 @@ def _next_action(event):
     if typ=='recording_updated': return {'type':'continue_current_work'}
     return {'type':'continue_current_work'}
 
-def apply_event_files(run_status_path,dashboard_path,event):
+def _apply_event_files_unlocked(run_status_path,dashboard_path,event):
     s=read(run_status_path,{}); d=read(dashboard_path,None)
     if not d: raise AssertionError('dashboard-data.json must be initialized from execution plan before runtime events')
     event=dict(event); typ=event.get('type'); bid=event.get('batch_id'); cid=event.get('case_id')
@@ -291,12 +344,14 @@ def apply_event_files(run_status_path,dashboard_path,event):
             elif s.get('open_defects'): s['next_action']={'type':'wait_bug_fix','bug_ref':s['open_defects'][0]}
             else: s['next_action']={'type':'result_review'}
     elif typ=='review_finished' and event.get('status')=='passed':
-        resumed_batch=_finish_resume_batch(s,bid)
+        resume_outcome=_finish_resume_batch(s,d,bid)
         if unhandled_fails or event.get('unhandled_fail_case_ids'):
             fail_cids=event.get('unhandled_fail_case_ids') or [c['id'] for c in unhandled_fails if c.get('batch_id')==bid] or [c['id'] for c in unhandled_fails]
             fail_bid=bid or (unhandled_fails[0].get('batch_id') if unhandled_fails else None)
             s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
-        elif resumed_batch:
+        elif resume_outcome.get('unresolved_case_ids'):
+            s['next_action']={'type':'resolve_blocked_cases','batch_id':bid,'case_ids':resume_outcome['unresolved_case_ids']}
+        elif resume_outcome.get('completed'):
             resume=_resume_action(s)
             if resume: s['next_action']=resume
             else:
@@ -324,6 +379,12 @@ def apply_event_files(run_status_path,dashboard_path,event):
                 s['next_action']={'type':'handle_defects','batch_id':fail_bid,'case_ids':fail_cids}
             else: s['next_action']={'type':'result_review'}
     write(run_status_path,s); write(dashboard_path,d); return {'run_status':s,'dashboard':d}
+
+def apply_event_files(run_status_path,dashboard_path,event):
+    # Independent Batch Workers share one Dashboard projection. Serialize read-modify-write
+    # so simultaneous Case/receipt events cannot erase each other's ledger projection.
+    with _run_event_lock(dashboard_path):
+        return _apply_event_files_unlocked(run_status_path,dashboard_path,event)
 
 
 

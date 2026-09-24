@@ -1,0 +1,171 @@
+[
+  {
+    "schema_version": 2,
+    "case_id": "TC-P6-API-001",
+    "batch_id": "B01",
+    "task_id": "B01-de185389eea1",
+    "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+    "agent_session_id": "/root/phase6_runtime_worker_b01",
+    "status": "PASS",
+    "actual_execution": "API",
+    "target_action_executed": true,
+    "expected_results": [
+      {
+        "id": "ASSERT-P6-API-STATUS-001",
+        "expected": "The response HTTP status is exactly 200.",
+        "actual": "The official Vitest Case script received HTTP 200 from GET http://127.0.0.1:41739/api/items/1.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B01/TC-P6-API-001/api/request-response.json",
+          "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+        ]
+      },
+      {
+        "id": "ASSERT-P6-API-BODY-001",
+        "expected": "The complete response JSON is exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; the id value has JSON string type.",
+        "actual": "The response body was exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; id had JSON string type.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B01/TC-P6-API-001/api/request-response.json",
+          "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence/B01/TC-P6-API-001/api/request-response.json",
+      "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+    ],
+    "automation_run": {
+      "script_ref": "scripts/api/B01/TC-P6-API-001.test.ts",
+      "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+      "runner": "vitest",
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "static_check_command": "npm run typecheck",
+      "debug_attempts": [],
+      "official_run": {
+        "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-API-001-20260923T140150Z",
+        "exit_code": 0,
+        "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+        "started_at": "2026-09-23T14:01:50.9322395Z",
+        "finished_at": "2026-09-23T14:01:52.1015451Z",
+        "report_ref": "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+      }
+    }
+  },
+  {
+    "schema_version": 2,
+    "case_id": "TC-P6-UI-001",
+    "batch_id": "B01",
+    "task_id": "B01-de185389eea1",
+    "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+    "agent_session_id": "/root/phase6_runtime_worker_b01",
+    "status": "PASS",
+    "actual_execution": "UI",
+    "target_action_executed": true,
+    "expected_results": [
+      {
+        "id": "ASSERT-P6-UI-RESULT-001",
+        "expected": "The visible #result text is exactly Smoke item — ready.",
+        "actual": "After clicking Load item in the Playwright Test UI run, #result displayed exactly Smoke item — ready.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B01/TC-P6-UI-001/ui/ASSERT-P6-UI-RESULT-001.png",
+          "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence/B01/TC-P6-UI-001/ui/ASSERT-P6-UI-RESULT-001.png",
+      "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+    ],
+    "automation_run": {
+      "script_ref": "scripts/ui/B01/TC-P6-UI-001.spec.ts",
+      "script_sha256": "82fddb4019622b37324a99cd9653b4c11b8a94eb2e680ff5d6ac057bf9979c7a",
+      "runner": "playwright-test",
+      "driver": "playwright-page",
+      "static_check": "passed",
+      "static_check_command": "npm run typecheck",
+      "debug_attempts": [
+        {
+          "attempt": 1,
+          "started_at": "2026-09-23T14:03:43.3779927Z",
+          "finished_at": "2026-09-23T14:03:44.3355608Z",
+          "command": "npm exec -- playwright test --config playwright.config.ts ../test-runs/PHASE6-RUNTIME-003/scripts/ui/B01/TC-P6-UI-001.spec.ts",
+          "exit_code": 1,
+          "finding": "No tests found; no browser test or Case assertion ran. Diagnosed testDir-relative filter and dependency module resolution; see evidence/B01/TC-P6-UI-001/debug/attempt-01-runner-no-tests.md."
+        }
+      ],
+      "official_run": {
+        "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-UI-001-20260923T140437Z",
+        "exit_code": 0,
+        "script_sha256": "82fddb4019622b37324a99cd9653b4c11b8a94eb2e680ff5d6ac057bf9979c7a",
+        "started_at": "2026-09-23T14:04:37.5186706Z",
+        "finished_at": "2026-09-23T14:04:39.2777003Z",
+        "report_ref": "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+      }
+    }
+  },
+  {
+    "schema_version": 2,
+    "case_id": "TC-P6-UI-002",
+    "batch_id": "B01",
+    "task_id": "B01-de185389eea1",
+    "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+    "agent_session_id": "/root/phase6_runtime_worker_b01",
+    "status": "PASS",
+    "actual_execution": "UI",
+    "target_action_executed": true,
+    "expected_results": [
+      {
+        "id": "ASSERT-P6-UI-002-HEADING",
+        "expected": "Before clicking Load item, the Item lookup heading is visible.",
+        "actual": "Before the click, the Item lookup heading was visible in the fixture page.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-HEADING.png",
+          "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+        ]
+      },
+      {
+        "id": "ASSERT-P6-UI-002-RESULT",
+        "expected": "After clicking Load item, the visible #result text is exactly Smoke item — ready.",
+        "actual": "After clicking Load item, #result displayed exactly Smoke item — ready.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-RESULT.png",
+          "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-HEADING.png",
+      "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-RESULT.png",
+      "evidence/B01/TC-P6-UI-002/files/playwright-report.json",
+      "evidence/B01/TC-P6-UI-002/ui/TC-P6-UI-002.webm"
+    ],
+    "recording_ref": "evidence/B01/TC-P6-UI-002/ui/TC-P6-UI-002.webm",
+    "automation_run": {
+      "script_ref": "scripts/ui/B01/TC-P6-UI-002.spec.ts",
+      "script_sha256": "f11d766bd76d8b8774d2685b9a4ee344db4476da6862e3b3351b160729beb1e0",
+      "runner": "playwright-test",
+      "driver": "playwright-page",
+      "static_check": "passed",
+      "static_check_command": "npm run typecheck",
+      "debug_attempts": [
+        {
+          "attempt": 1,
+          "finding": "Both screenshot checkpoints were captured, but the test timed out in afterEach while awaiting video.saveAs before BrowserContext close. This attempt was rejected; raw report, failure screenshot, error context, and trace were retained under evidence/B01/TC-P6-UI-002/debug/attempt-01/. The script was corrected to let the configured Playwright video finalize after test completion, then the official runner was rerun."
+        }
+      ],
+      "official_run": {
+        "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-UI-002-20260923T140658Z",
+        "exit_code": 0,
+        "script_sha256": "f11d766bd76d8b8774d2685b9a4ee344db4476da6862e3b3351b160729beb1e0",
+        "started_at": "2026-09-23T14:06:58.5251385Z",
+        "finished_at": "2026-09-23T14:07:00.3268931Z",
+        "report_ref": "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+      }
+    }
+  }
+]

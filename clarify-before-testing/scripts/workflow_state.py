@@ -10,13 +10,13 @@ STAGES=['business-modeling','case-design','execution-planning','data-readiness',
 LEGAL={
  'business-modeling':{'case-design'},
  'case-design':{'business-modeling','execution-planning'},
- 'execution-planning':{'data-readiness'},
+ 'execution-planning':{'data-readiness','case-design'},
  'data-readiness':{'execution-runtime'},
  'execution-runtime':{'defect-handling','result-review','data-readiness','execution-planning','case-design'},
  'defect-handling':{'execution-runtime','data-readiness','result-review'},
  'result-review':{'closed'}, 'closed':set(),
 }
-BACKWARD={('case-design','business-modeling'),('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
+BACKWARD={('case-design','business-modeling'),('execution-planning','case-design'),('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
 ARTIFACT_FLAGS={
  'business-understanding':('business_self_review_passed','business_understanding_confirmed'),
  'test-points':('test_points_self_review_passed','test_points_confirmed'),
@@ -87,8 +87,8 @@ def _resolve_contract_input(state_path,kind,explicit=None):
     fail('artifact.contract_input',f'no internal contract input found for {kind}; pass --contract-input explicitly')
 
 def _confirmed_cases_binding(s):
+    rec=_require_current_confirmed(s,'test-cases','test-cases must remain current, registered, self-reviewed and confirmed before Planning')
     b=s.get('confirmation_bindings',{}).get('test-cases')
-    if not b: fail('execution-plan.confirmed_cases','test-cases must be confirmed before planning self-review')
     cp=Path(b.get('contract_path',''))
     if not cp.exists() or sha256(cp)!=b.get('contract_sha256'): fail('execution-plan.confirmed_cases','confirmed test-case contract input changed or disappeared')
     return cp,b
@@ -109,7 +109,6 @@ def set_batch_data_ready(state_path,batch_id,manifest_path):
     s=read(state_path)
     if s.get('current_stage')!='data-readiness': fail('batch_data.stage','Batch data can only be bound during data-readiness')
     if not batch_id: fail('batch_data.batch_id','required')
-    if s.get('current_batch') not in (None,batch_id): fail('batch_data.batch_id',f'current Batch is {s.get("current_batch")}, not {batch_id}')
     run=_run_dir_from_state(state_path); mp=Path(manifest_path).resolve(); allowed=run/'internal/data/manifests'
     if not _inside(mp,allowed): fail('batch_data.manifest',f'manifest must be stored under {allowed}')
     if not mp.exists() or not mp.is_file(): fail('batch_data.manifest',f'file not found: {manifest_path}')
@@ -117,17 +116,33 @@ def set_batch_data_ready(state_path,batch_id,manifest_path):
     if manifest.get('batch_id')!=batch_id: fail('batch_data.batch_id','manifest batch_id does not match the requested Batch')
     root=Path(__file__).resolve().parents[2]
     m=_load_module(root/'test-data-readiness/scripts/data_manifest.py','batch_data_manifest_bound')
-    validation=m.validate(manifest,plan)
+    validation=m.validate(manifest,plan,run)
     rec={'batch_id':batch_id,'manifest_path':str(mp),'manifest_sha256':sha256(mp),
          'plan_path':str(plan_path),'plan_sha256':plan_binding['contract_sha256'],
          'validated_at':now(),'validation':validation}
     s.setdefault('batch_data_bindings',{})[batch_id]=rec
     s.setdefault('batch_data_status',{})[batch_id]='ready'
-    s['current_batch']=batch_id; s['current_batch_data_ready']=True
+    ready_parallel=[]
+    planned={b['id']:b for b in plan.get('batches',[])}
+    case_batch={c['case_id']:c.get('batch_id') for c in plan.get('cases',[])}
+    for bid,status in s.get('batch_data_status',{}).items():
+        batch=planned.get(bid)
+        if status!='ready' or not batch or batch.get('parallel_safe') is not True: continue
+        cross_dep=any(case_batch.get(dep)!=bid for c in plan.get('cases',[]) if c.get('batch_id')==bid for dep in c.get('dependencies',[]) or [])
+        if not cross_dep: ready_parallel.append(bid)
+    ready_parallel.sort(key=lambda x: next(i for i,b in enumerate(plan.get('batches',[])) if b['id']==x))
+    if len(ready_parallel)>=2:
+        s['parallel_batch_ids']=ready_parallel
+        s['current_batch']=None; s['current_batch_data_ready']=False
+        s['next_action']={'type':'execute_parallel_batches','batch_ids':ready_parallel}
+    else:
+        s['parallel_batch_ids']=[]
+        s['current_batch']=batch_id; s['current_batch_data_ready']=True
     resume=s.get('pending_resume') if isinstance(s.get('pending_resume'),dict) and s['pending_resume'].get('batch_id')==batch_id else None
     s['last_event']={'type':'batch_data_ready','batch_id':batch_id,'at':now()}
     s['current_action']={'type':'batch_data_ready','batch_id':batch_id}
-    s['next_action']=({'type':'resume_blocked_cases','batch_id':batch_id,'case_ids':resume.get('case_ids',[]),'bug_ref':resume.get('bug_ref')} if resume else {'type':'execute_batch','batch_id':batch_id})
+    if len(ready_parallel)<2:
+        s['next_action']=({'type':'resume_blocked_cases','batch_id':batch_id,'case_ids':resume.get('case_ids',[]),'bug_ref':resume.get('bug_ref')} if resume else {'type':'execute_batch','batch_id':batch_id})
     s['updated_at']=now(); write(state_path,s); return s
 
 def _validate_contract(state_path,kind,contract_input,for_confirmation=False):
@@ -162,8 +177,14 @@ def _validate_contract(state_path,kind,contract_input,for_confirmation=False):
         out=m.validate(data,confirmed_points,confirmed_business,require_confirmed=for_confirmation)
     elif kind=='execution-plan':
         s=read(state_path); confirmed_path,binding=_confirmed_cases_binding(s); confirmed=read(confirmed_path)
+        business_rec=_require_current_confirmed(s,'business-understanding','business understanding must remain confirmed before Planning')
+        points_rec=_require_current_confirmed(s,'test-points','test points must remain confirmed before Planning')
+        business=read(business_rec['contract_path']); points=read(points_rec['contract_path'])
+        case_module=_load_module(root/'test-case-design/scripts/case_contract.py','execution_plan_confirmed_case_contract')
+        case_module.validate(confirmed,points,business,require_confirmed=True)
+        normalized_cases={'cases':case_module.project_execution_cases(confirmed)}
         m=_load_module(root/'test-execution-planning/scripts/execution_plan.py','execution_plan_contract_bound')
-        out=m.validate(data,require_confirmed=False,confirmed_cases=confirmed,confirmed_cases_sha256=binding['contract_sha256'])
+        out=m.validate(data,require_confirmed=False,confirmed_cases=normalized_cases,confirmed_cases_sha256=binding['contract_sha256'])
     else:
         fail('artifact.kind',f'unsupported contract-bound artifact {kind}')
     return out
@@ -292,15 +313,22 @@ def _check_prereq(s,source,target,target_batch=None):
         _require_current_confirmed(s,'execution-plan','execution plan must be contract-validated, self-reviewed, artifact-bound and confirmed')
     elif (source,target)==('data-readiness','execution-runtime'):
         bid=target_batch or s.get('current_batch')
-        binding=s.get('batch_data_bindings',{}).get(bid)
-        if not bid or s.get('current_batch_data_ready') is not True or s.get('batch_data_status',{}).get(bid)!='ready' or not binding:
+        parallel=s.get('parallel_batch_ids',[]) if s.get('next_action',{}).get('type')=='execute_parallel_batches' else []
+        targets=parallel or ([bid] if bid else [])
+        if not targets: fail('transition','one ready Batch or an approved parallel Batch group is required before Runtime')
+        for target_bid in targets:
+            binding=s.get('batch_data_bindings',{}).get(target_bid)
+            if s.get('batch_data_status',{}).get(target_bid)!='ready' or not binding:
+                fail('transition',f'Batch {target_bid} data must be contract-validated and bound before Runtime')
+        if not parallel and s.get('current_batch_data_ready') is not True:
             fail('transition','current Batch data must be contract-validated and bound before Runtime')
-        mp=Path(binding.get('manifest_path','')); pp=Path(binding.get('plan_path',''))
-        if not mp.exists() or sha256(mp)!=binding.get('manifest_sha256'):
-            fail('transition','bound Batch data manifest changed or disappeared')
         plan_path,plan_binding=_confirmed_plan_binding(s)
-        if pp.resolve()!=plan_path.resolve() or binding.get('plan_sha256')!=plan_binding.get('contract_sha256'):
-            fail('transition','Batch data binding does not match the current confirmed execution plan')
+        for target_bid in targets:
+            binding=s['batch_data_bindings'][target_bid]; mp=Path(binding.get('manifest_path','')); pp=Path(binding.get('plan_path',''))
+            if not mp.exists() or sha256(mp)!=binding.get('manifest_sha256'):
+                fail('transition',f'Batch {target_bid} data manifest changed or disappeared')
+            if pp.resolve()!=plan_path.resolve() or binding.get('plan_sha256')!=plan_binding.get('contract_sha256'):
+                fail('transition',f'Batch {target_bid} data binding does not match the current confirmed execution plan')
     elif (source,target)==('result-review','closed'):
         if s.get('final_review_status')!='passed' or not s.get('final_review_source'): fail('transition','validated final review artifact must be bound before closing Run')
         src=s['final_review_source']; p=Path(src.get('path',''))
@@ -322,7 +350,7 @@ def _normal_batch_data_transition(s,source,target,batch):
     action=s.get('next_action',{})
     act_type=action.get('type')
     act_bid=action.get('batch_id')
-    if act_type in {'prepare_batch_data','prepare_resumed_cases_data'} and (not act_bid or act_bid==batch):
+    if act_type in {'prepare_batch_data','prepare_resumed_cases_data','resolve_blocked_cases'} and (not act_bid or act_bid==batch):
         return True
     b_status=s.get('batch_status',{}).get(batch)
     if b_status in {'pending','needs_rework'}:
@@ -355,7 +383,7 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
             s['current_batch_data_ready']=(s.get('batch_data_status',{}).get(batch)=='ready')
         else:
             s['current_batch_data_ready']=False
-        if previous_next.get('type')=='prepare_resumed_cases_data' and previous_next.get('batch_id')==batch:
+        if previous_next.get('type') in {'prepare_resumed_cases_data','resolve_blocked_cases'} and previous_next.get('batch_id')==batch:
             s['pending_resume']={'batch_id':batch,'case_ids':previous_next.get('case_ids',[]),'bug_ref':previous_next.get('bug_ref')}
         else: s['pending_resume']=None
     write(path,s); return s

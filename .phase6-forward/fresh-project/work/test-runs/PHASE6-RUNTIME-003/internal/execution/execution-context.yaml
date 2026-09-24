@@ -1,0 +1,16 @@
+{
+  "environment_ready": true,
+  "environment_id": "repository-local-phase6-smoke-fixture",
+  "project_root": ".phase6-forward/fresh-project",
+  "automation_root": ".phase6-forward/fresh-project/work/test-automation",
+  "api_base_url": "http://127.0.0.1:41739",
+  "web_base_url": "http://127.0.0.1:41739/",
+  "account_required": false,
+  "secrets_required": false,
+  "data_scope": "fixed in-process repository-local fixture; read-only API and UI smoke only",
+  "notes": [
+    "Do not target a real business project or production system.",
+    "The API GET /api/items/1 returns a fixed JSON object and performs no persistence.",
+    "The UI fixture loads the same object and displays the fixed result."
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "case_id": "TC-P6-API-001",
+  "batch_id": "B01",
+  "task_id": "B01-de185389eea1",
+  "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+  "agent_session_id": "/root/phase6_runtime_worker_b01",
+  "status": "PASS",
+  "actual_execution": "API",
+  "target_action_executed": true,
+  "expected_results": [
+    {
+      "id": "ASSERT-P6-API-STATUS-001",
+      "expected": "The response HTTP status is exactly 200.",
+      "actual": "The official Vitest Case script received HTTP 200 from GET http://127.0.0.1:41739/api/items/1.",
+      "result": "pass",
+      "evidence_refs": [
+        "evidence/B01/TC-P6-API-001/api/request-response.json",
+        "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+      ]
+    },
+    {
+      "id": "ASSERT-P6-API-BODY-001",
+      "expected": "The complete response JSON is exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; the id value has JSON string type.",
+      "actual": "The response body was exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; id had JSON string type.",
+      "result": "pass",
+      "evidence_refs": [
+        "evidence/B01/TC-P6-API-001/api/request-response.json",
+        "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "evidence/B01/TC-P6-API-001/api/request-response.json",
+    "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+  ],
+  "automation_run": {
+    "script_ref": "scripts/api/B01/TC-P6-API-001.test.ts",
+    "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+    "runner": "vitest",
+    "driver": "node-native-fetch",
+    "static_check": "passed",
+    "static_check_command": "npm run typecheck",
+    "debug_attempts": [],
+    "official_run": {
+      "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-API-001-20260923T140150Z",
+      "exit_code": 0,
+      "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+      "started_at": "2026-09-23T14:01:50.9322395Z",
+      "finished_at": "2026-09-23T14:01:52.1015451Z",
+      "report_ref": "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+    }
+  }
+}

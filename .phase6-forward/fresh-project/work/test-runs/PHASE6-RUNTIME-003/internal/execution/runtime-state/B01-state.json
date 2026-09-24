@@ -1,0 +1,381 @@
+{
+  "batch_id": "B01",
+  "status": "completed",
+  "precheck": {
+    "status": "ready",
+    "reason": "precheck passed"
+  },
+  "task_ref": "internal\\execution\\tasks\\B01-task.json",
+  "worker_results_ref": "internal\\execution\\results\\B01-worker-results.json",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B01-worker-self-review.json",
+  "worker_self_review": {
+    "task_id": "B01-de185389eea1",
+    "input_task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+    "agent_session_id": "/root/phase6_runtime_worker_b01",
+    "results_sha256": "24c151255032a7a158b6ff795020e22660bf58d1a8637db5f1cb96f2b43a3440",
+    "status": "passed",
+    "checked_case_ids": [
+      "TC-P6-API-001",
+      "TC-P6-UI-001",
+      "TC-P6-UI-002"
+    ],
+    "checks": {
+      "all_cases_checked": true,
+      "all_expected_checked": true,
+      "execution_method_checked": true,
+      "evidence_binding_checked": true,
+      "failure_classification_checked": true,
+      "file_cleanup_checked": true
+    },
+    "findings": [
+      {
+        "type": "resolved_execution_issue",
+        "case_id": "TC-P6-UI-001",
+        "finding": "The first Playwright invocation used a test filter outside the configured testDir-relative path and did not discover a test. Dependency resolution was corrected through the project's framework wrapper; the final official run discovered and passed exactly the planned test. Discovery diagnostics are retained under evidence/B01/TC-P6-UI-001/debug/.",
+        "final_run_status": "passed"
+      },
+      {
+        "type": "resolved_execution_issue",
+        "case_id": "TC-P6-UI-002",
+        "finding": "The initial recording implementation awaited video.saveAs in afterEach and timed out before BrowserContext close. The failed report, trace, error context, and failure screenshot were preserved; the script was updated to use Playwright's configured video lifecycle, rerun, and produced a non-empty 7514-byte WebM plus both checkpoint screenshots.",
+        "final_run_status": "passed"
+      },
+      {
+        "type": "scope_check",
+        "finding": "All three formal cases used only the repository-local fixture and exact planned API/UI execution methods. No Case, Expected, Plan, business project, or global Skill files were changed; no product issue was observed in the final runs.",
+        "final_run_status": "passed"
+      }
+    ],
+    "reviewed_at": "2026-09-23T14:08:30Z"
+  },
+  "worker_dispatch_receipt": {
+    "agent_role": "execution_worker",
+    "agent_session_id": "/root/phase6_runtime_worker_b01",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase6_runtime_worker_b01",
+    "task_id": "B01-de185389eea1",
+    "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+    "started_at": "2026-09-23T13:58:24Z",
+    "accepted_at": "2026-09-23T13:58:40.031668+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-23T14:08:47.185044+00:00",
+    "result_status": {
+      "overall": "PASS",
+      "cases": {
+        "TC-P6-API-001": "PASS",
+        "TC-P6-UI-001": "PASS",
+        "TC-P6-UI-002": "PASS"
+      }
+    },
+    "outputs": {
+      "internal\\execution\\results\\B01-worker-results.json": "24c151255032a7a158b6ff795020e22660bf58d1a8637db5f1cb96f2b43a3440",
+      "internal\\execution\\dispatch\\B01-worker-self-review.json": "61ab125335a133b5c35d948ce7dd4e28016204bdd860a0291f5f35b40c6c217a"
+    }
+  },
+  "reviewer_task_ref": "internal\\execution\\dispatch\\B01-reviewer-task.json",
+  "reviewer_dispatch_receipt": {
+    "agent_role": "result_reviewer",
+    "agent_session_id": "/root/phase6_result_reviewer_b01",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase6_result_reviewer_b01",
+    "task_id": "B01-reviewer-001",
+    "task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d",
+    "started_at": "2026-09-23T14:09:58Z",
+    "accepted_at": "2026-09-23T14:10:05.599596+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-23T14:12:42.869178+00:00",
+    "result_status": "passed",
+    "outputs": {
+      "internal/execution/results/B01-reviewer-results.json": "dbcfa06582bf306ed003eb149ce2ea565bb6bd22914ca52b856d9666a0bd59b6"
+    }
+  },
+  "reviewer": {
+    "schema_version": 2,
+    "reviewer_task_id": "B01-reviewer-001",
+    "input_task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d",
+    "input_results_sha256": "24c151255032a7a158b6ff795020e22660bf58d1a8637db5f1cb96f2b43a3440",
+    "agent_session_id": "/root/phase6_result_reviewer_b01",
+    "status": "passed",
+    "findings": [
+      {
+        "type": "case_review",
+        "case_id": "TC-P6-API-001",
+        "finding": "Both planned Expected assertions are supported by the redacted request/response artifact and the official Vitest report. The request is GET to the isolated fixture, the captured response is HTTP 200 with the exact JSON and string id, and the runner report identifies exactly this Case script with one passed test and no failures. The declared script, report, request/response, result and immutable snapshot hashes match."
+      },
+      {
+        "type": "case_review",
+        "case_id": "TC-P6-UI-001",
+        "finding": "The Playwright report identifies exactly the planned UI script and one passed test with no errors. The screenshot visibly shows the Item lookup UI after Load item with #result text Smoke item — ready. The planned primary method remains UI; script, report, screenshot, result and immutable snapshot hashes match. The earlier no-tests attempt is isolated in debug evidence, explicitly records that no browser assertion ran, and does not appear as the official run."
+      },
+      {
+        "type": "case_review",
+        "case_id": "TC-P6-UI-002",
+        "finding": "Both Expected assertions are supported. The pre-click screenshot shows the Item lookup heading, Load item button and Not loaded state; the post-click screenshot shows Smoke item — ready. The final script captures these in that order, with the click between them. The official Playwright report identifies the planned script, one passed test, no errors, and a video/webm attachment; the referenced WebM exists and is 7,514 bytes. The declared script, report, both screenshots, video, result and immutable snapshot hashes match. The earlier attempt is preserved separately with a timedOut report, failure screenshot, error context and trace; its afterEach video.saveAs timeout is not treated as a passing result and does not contaminate the final official report."
+      },
+      {
+        "type": "cross_case_review",
+        "finding": "Worker task/result/session bindings and the separate Reviewer task/session bindings are distinct and consistent with the accepted Runtime dispatch receipts. The Worker result covers the three planned Cases in order and every planned Expected exactly once. All 11 task-declared artifacts were present and their live SHA-256 values matched both the frozen Reviewer Task manifest and immutable snapshot copies. The official runner reports and final script hashes are linked from each Case result."
+      }
+    ],
+    "checked_case_ids": [
+      "TC-P6-API-001",
+      "TC-P6-UI-001",
+      "TC-P6-UI-002"
+    ],
+    "retest_case_ids": [],
+    "return_stage": null,
+    "checks": {
+      "completeness_checked": true,
+      "method_consistency_checked": true,
+      "judgement_checked": true,
+      "evidence_checked": true,
+      "abnormal_classification_checked": true
+    },
+    "reviewed_at": "2026-09-23T14:11:30Z"
+  },
+  "review_history": [
+    {
+      "type": "initial_or_batch_review",
+      "review": {
+        "schema_version": 2,
+        "reviewer_task_id": "B01-reviewer-001",
+        "input_task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d",
+        "input_results_sha256": "24c151255032a7a158b6ff795020e22660bf58d1a8637db5f1cb96f2b43a3440",
+        "agent_session_id": "/root/phase6_result_reviewer_b01",
+        "status": "passed",
+        "findings": [
+          {
+            "type": "case_review",
+            "case_id": "TC-P6-API-001",
+            "finding": "Both planned Expected assertions are supported by the redacted request/response artifact and the official Vitest report. The request is GET to the isolated fixture, the captured response is HTTP 200 with the exact JSON and string id, and the runner report identifies exactly this Case script with one passed test and no failures. The declared script, report, request/response, result and immutable snapshot hashes match."
+          },
+          {
+            "type": "case_review",
+            "case_id": "TC-P6-UI-001",
+            "finding": "The Playwright report identifies exactly the planned UI script and one passed test with no errors. The screenshot visibly shows the Item lookup UI after Load item with #result text Smoke item — ready. The planned primary method remains UI; script, report, screenshot, result and immutable snapshot hashes match. The earlier no-tests attempt is isolated in debug evidence, explicitly records that no browser assertion ran, and does not appear as the official run."
+          },
+          {
+            "type": "case_review",
+            "case_id": "TC-P6-UI-002",
+            "finding": "Both Expected assertions are supported. The pre-click screenshot shows the Item lookup heading, Load item button and Not loaded state; the post-click screenshot shows Smoke item — ready. The final script captures these in that order, with the click between them. The official Playwright report identifies the planned script, one passed test, no errors, and a video/webm attachment; the referenced WebM exists and is 7,514 bytes. The declared script, report, both screenshots, video, result and immutable snapshot hashes match. The earlier attempt is preserved separately with a timedOut report, failure screenshot, error context and trace; its afterEach video.saveAs timeout is not treated as a passing result and does not contaminate the final official report."
+          },
+          {
+            "type": "cross_case_review",
+            "finding": "Worker task/result/session bindings and the separate Reviewer task/session bindings are distinct and consistent with the accepted Runtime dispatch receipts. The Worker result covers the three planned Cases in order and every planned Expected exactly once. All 11 task-declared artifacts were present and their live SHA-256 values matched both the frozen Reviewer Task manifest and immutable snapshot copies. The official runner reports and final script hashes are linked from each Case result."
+          }
+        ],
+        "checked_case_ids": [
+          "TC-P6-API-001",
+          "TC-P6-UI-001",
+          "TC-P6-UI-002"
+        ],
+        "retest_case_ids": [],
+        "return_stage": null,
+        "checks": {
+          "completeness_checked": true,
+          "method_consistency_checked": true,
+          "judgement_checked": true,
+          "evidence_checked": true,
+          "abnormal_classification_checked": true
+        },
+        "reviewed_at": "2026-09-23T14:11:30Z"
+      },
+      "reviewer_task_hash": "8cb93596390ddb1cd9ec263ff7c077934f1e47818619bb13b1ca9eee4ee9e25d"
+    }
+  ],
+  "retest_history": [],
+  "retest_tasks": [],
+  "active_retest": null,
+  "partial_case_results": {
+    "TC-P6-API-001": {
+      "schema_version": 2,
+      "case_id": "TC-P6-API-001",
+      "batch_id": "B01",
+      "task_id": "B01-de185389eea1",
+      "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+      "agent_session_id": "/root/phase6_runtime_worker_b01",
+      "status": "PASS",
+      "actual_execution": "API",
+      "target_action_executed": true,
+      "expected_results": [
+        {
+          "id": "ASSERT-P6-API-STATUS-001",
+          "expected": "The response HTTP status is exactly 200.",
+          "actual": "The official Vitest Case script received HTTP 200 from GET http://127.0.0.1:41739/api/items/1.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B01/TC-P6-API-001/api/request-response.json",
+            "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+          ]
+        },
+        {
+          "id": "ASSERT-P6-API-BODY-001",
+          "expected": "The complete response JSON is exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; the id value has JSON string type.",
+          "actual": "The response body was exactly {\"id\":\"1\",\"name\":\"Smoke item\",\"status\":\"ready\"}; id had JSON string type.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B01/TC-P6-API-001/api/request-response.json",
+            "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "evidence/B01/TC-P6-API-001/api/request-response.json",
+        "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+      ],
+      "automation_run": {
+        "script_ref": "scripts/api/B01/TC-P6-API-001.test.ts",
+        "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "static_check": "passed",
+        "static_check_command": "npm run typecheck",
+        "debug_attempts": [],
+        "official_run": {
+          "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-API-001-20260923T140150Z",
+          "exit_code": 0,
+          "script_sha256": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+          "started_at": "2026-09-23T14:01:50.9322395Z",
+          "finished_at": "2026-09-23T14:01:52.1015451Z",
+          "report_ref": "evidence/B01/TC-P6-API-001/files/vitest-report.json"
+        }
+      }
+    },
+    "TC-P6-UI-001": {
+      "schema_version": 2,
+      "case_id": "TC-P6-UI-001",
+      "batch_id": "B01",
+      "task_id": "B01-de185389eea1",
+      "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+      "agent_session_id": "/root/phase6_runtime_worker_b01",
+      "status": "PASS",
+      "actual_execution": "UI",
+      "target_action_executed": true,
+      "expected_results": [
+        {
+          "id": "ASSERT-P6-UI-RESULT-001",
+          "expected": "The visible #result text is exactly Smoke item — ready.",
+          "actual": "After clicking Load item in the Playwright Test UI run, #result displayed exactly Smoke item — ready.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B01/TC-P6-UI-001/ui/ASSERT-P6-UI-RESULT-001.png",
+            "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "evidence/B01/TC-P6-UI-001/ui/ASSERT-P6-UI-RESULT-001.png",
+        "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+      ],
+      "automation_run": {
+        "script_ref": "scripts/ui/B01/TC-P6-UI-001.spec.ts",
+        "script_sha256": "82fddb4019622b37324a99cd9653b4c11b8a94eb2e680ff5d6ac057bf9979c7a",
+        "runner": "playwright-test",
+        "driver": "playwright-page",
+        "static_check": "passed",
+        "static_check_command": "npm run typecheck",
+        "debug_attempts": [
+          {
+            "attempt": 1,
+            "started_at": "2026-09-23T14:03:43.3779927Z",
+            "finished_at": "2026-09-23T14:03:44.3355608Z",
+            "command": "npm exec -- playwright test --config playwright.config.ts ../test-runs/PHASE6-RUNTIME-003/scripts/ui/B01/TC-P6-UI-001.spec.ts",
+            "exit_code": 1,
+            "finding": "No tests found; no browser test or Case assertion ran. Diagnosed testDir-relative filter and dependency module resolution; see evidence/B01/TC-P6-UI-001/debug/attempt-01-runner-no-tests.md."
+          }
+        ],
+        "official_run": {
+          "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-UI-001-20260923T140437Z",
+          "exit_code": 0,
+          "script_sha256": "82fddb4019622b37324a99cd9653b4c11b8a94eb2e680ff5d6ac057bf9979c7a",
+          "started_at": "2026-09-23T14:04:37.5186706Z",
+          "finished_at": "2026-09-23T14:04:39.2777003Z",
+          "report_ref": "evidence/B01/TC-P6-UI-001/files/playwright-report.json"
+        }
+      }
+    },
+    "TC-P6-UI-002": {
+      "schema_version": 2,
+      "case_id": "TC-P6-UI-002",
+      "batch_id": "B01",
+      "task_id": "B01-de185389eea1",
+      "task_hash": "ddced0d3f47ccd8b4baf2314a11dba39086ff5da750db4243f1fab7186ebe9fa",
+      "agent_session_id": "/root/phase6_runtime_worker_b01",
+      "status": "PASS",
+      "actual_execution": "UI",
+      "target_action_executed": true,
+      "expected_results": [
+        {
+          "id": "ASSERT-P6-UI-002-HEADING",
+          "expected": "Before clicking Load item, the Item lookup heading is visible.",
+          "actual": "Before the click, the Item lookup heading was visible in the fixture page.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-HEADING.png",
+            "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+          ]
+        },
+        {
+          "id": "ASSERT-P6-UI-002-RESULT",
+          "expected": "After clicking Load item, the visible #result text is exactly Smoke item — ready.",
+          "actual": "After clicking Load item, #result displayed exactly Smoke item — ready.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-RESULT.png",
+            "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+          ]
+        }
+      ],
+      "evidence_refs": [
+        "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-HEADING.png",
+        "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-RESULT.png",
+        "evidence/B01/TC-P6-UI-002/files/playwright-report.json",
+        "evidence/B01/TC-P6-UI-002/ui/TC-P6-UI-002.webm"
+      ],
+      "recording_ref": "evidence/B01/TC-P6-UI-002/ui/TC-P6-UI-002.webm",
+      "automation_run": {
+        "script_ref": "scripts/ui/B01/TC-P6-UI-002.spec.ts",
+        "script_sha256": "f11d766bd76d8b8774d2685b9a4ee344db4476da6862e3b3351b160729beb1e0",
+        "runner": "playwright-test",
+        "driver": "playwright-page",
+        "static_check": "passed",
+        "static_check_command": "npm run typecheck",
+        "debug_attempts": [
+          {
+            "attempt": 1,
+            "finding": "Both screenshot checkpoints were captured, but the test timed out in afterEach while awaiting video.saveAs before BrowserContext close. This attempt was rejected; raw report, failure screenshot, error context, and trace were retained under evidence/B01/TC-P6-UI-002/debug/attempt-01/. The script was corrected to let the configured Playwright video finalize after test completion, then the official runner was rerun."
+          }
+        ],
+        "official_run": {
+          "run_id": "PHASE6-RUNTIME-003-B01-TC-P6-UI-002-20260923T140658Z",
+          "exit_code": 0,
+          "script_sha256": "f11d766bd76d8b8774d2685b9a4ee344db4476da6862e3b3351b160729beb1e0",
+          "started_at": "2026-09-23T14:06:58.5251385Z",
+          "finished_at": "2026-09-23T14:07:00.3268931Z",
+          "report_ref": "evidence/B01/TC-P6-UI-002/files/playwright-report.json"
+        }
+      }
+    }
+  },
+  "current_case": null,
+  "current_worker": null,
+  "case_result_ledger_ref": "internal/execution/results/case-results-ledger.json",
+  "worker_receipt_ref": "internal\\execution\\dispatch\\B01-worker-receipt.json",
+  "case_started_at": "2026-09-23T14:05:08.267825+00:00",
+  "last_completed_case": "TC-P6-UI-002",
+  "frozen_results_sha256": "24c151255032a7a158b6ff795020e22660bf58d1a8637db5f1cb96f2b43a3440",
+  "frozen_artifact_sha256": {
+    "evidence/B01/TC-P6-API-001/api/request-response.json": "6b1410201afbf6174b2584fd2462e42eeb7324118c961cb6fc0d32b843358da1",
+    "evidence/B01/TC-P6-API-001/files/vitest-report.json": "b3f1d120124102ccdf1b59853da20331a94f4030fa24675213a4ac04af72c992",
+    "evidence/B01/TC-P6-UI-001/files/playwright-report.json": "4a887a7ccee132a8c5b1f68ae808f16ecae220b63e04e189104d6f0a69a33834",
+    "evidence/B01/TC-P6-UI-001/ui/ASSERT-P6-UI-RESULT-001.png": "e343081b054f2090c678dbb62c5798699cf8747138f0ff015fce8ab2c117c60b",
+    "evidence/B01/TC-P6-UI-002/files/playwright-report.json": "4870fe5e3b9f6c92e759fed1bc5670edb7a7e6d77aa8ee4461f90f3f765c46d3",
+    "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-HEADING.png": "9be5a1ec70197a92a89c12cb202413c25cf2d73aecc306f29345e9ce075e44d7",
+    "evidence/B01/TC-P6-UI-002/ui/ASSERT-P6-UI-002-RESULT.png": "e343081b054f2090c678dbb62c5798699cf8747138f0ff015fce8ab2c117c60b",
+    "evidence/B01/TC-P6-UI-002/ui/TC-P6-UI-002.webm": "20b316ecd712effdf42cb45b4c9f0f59c8bec4c409a178f2963a783cf5a1185e",
+    "scripts/api/B01/TC-P6-API-001.test.ts": "0751e58c1b213b319a3d5062a2da29cbaef14ebeddb5fe82add3ce49110309d1",
+    "scripts/ui/B01/TC-P6-UI-001.spec.ts": "82fddb4019622b37324a99cd9653b4c11b8a94eb2e680ff5d6ac057bf9979c7a",
+    "scripts/ui/B01/TC-P6-UI-002.spec.ts": "f11d766bd76d8b8774d2685b9a4ee344db4476da6862e3b3351b160729beb1e0"
+  },
+  "reviewer_receipt_ref": "internal\\execution\\dispatch\\B01-reviewer-receipt.json"
+}

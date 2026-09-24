@@ -1,9 +1,57 @@
 # 新版测试 Skill 改造计划
 
-> 状态：实施中（Phase 0 至 Phase 4 已完成；Phase 5 待实施）
+> 状态：Phase 0 至 Phase 4、Phase 6 的实现和验收通过；Phase 5 的并行与回归/恢复运行档案存在，但按当前 Final Review Contract 重验失败，需重新完成 Phase 5 验收；Phase 7 已按用户指示完成 Codex 与 Gemini 目录覆盖，Claude 目录未操作。
 > 目标仓库：`C:\Users\17381\Desktop\测试全流程skill`
 > 改造策略：直接升级当前版本，不保留旧执行契约兼容层；完成验收并经用户确认后，再覆盖同步到实际 Skill 安装目录。
 > 本文是本轮改造的事实源。实施中若要改变冻结决策，必须先更新本文并说明理由，不能边改边改变架构。
+
+### Phase 6 实施发现：Case Design → Planning 投影
+
+正式 Router Run `PHASE6-RUNTIME-003` 证明当前 Case Contract 产出 `case_templates` / `execution_instances`，而 Execution Planning 与 Final Review 只消费顶层 `cases`；确认的 Case 文件直接交给 Planning 时会得到空 Case 集并拒绝。此为计划与现状的 producer-consumer 断点，不改变本计划冻结的业务规则或自动化栈决策。
+
+最小修正：由 `test-case-design/scripts/case_contract.py` 提供确定性、不可手工编辑的 Runtime Case 投影；每个 `execution_instance` 生成独立 Runtime Case，Expected 只取该实例映射的断言，模板必须明确提供 `target_action`。Router、Execution Plan CLI、Final Review 均须从已绑定的原始 Case Design、Test Points、Business Model 重新严格校验并调用同一投影函数；Execution Plan 仍以完整 Case Design 文件 SHA-256 绑定确认版本。不新增旧格式 fallback，不在源 Case 文件中维护第二份可编辑 `cases` 真相。此投影是实现层的确定性规范化，不另设人工确认决策。Planning 中发现并修订上游 Case 时，Router 还需允许带原因返回 Case Design；重新注册新版 Case 后自动清除失效的下游计划/数据确认。
+
+后续合同审查补充：`step` 与 `intermediate` Expected 必须绑定本 Case 内明确的 `step_id`，并原样进入 Runtime Plan；证据等级、录屏布尔值和 Expected 映射必须从机器可读 `evidence_policy` 投影，Planning 不得弱化。参数化模板的策略映射按每个实例实际承接的 Expected 过滤，同时确保每个必需证据断言至少进入一个实例；证据 kind 在 Case Contract 阶段枚举校验。Planning/Final Review 还必须分别验证 Router 注册的 Case 展示文件、合同文件、Review 文件和确认绑定的路径及 SHA-256 均当前一致。
+
+Runtime 证据绑定补充：当 Planning 将 `runner_report` 列为某 Expected 的必需文件证据时，该 Expected 必须引用与 `automation_run.official_run.report_ref` 同一份官方 JSON 报告；只验证另一个独立的官方报告存在不足以满足逐 Expected 证据策略。
+
+`runner_report` 只适用于自动化 Case；人工 Case 的必需证据不得要求官方自动化 Runner 报告。
+
+截图执行校验补充：Planning `screenshots[].expected_ids` 中的每个 Expected 都必须在自己的结果行引用图像证据；中间检查点要按步骤时序采集，不能仅凭执行后的最终画面倒推先前状态。
+
+### Phase 6 最终验收记录（2026-09-23）
+
+- 正式 Router Run：`.phase6-forward/fresh-project/work/test-runs/PHASE6-RUNTIME-003`。B01 的 3 个冻结 Case（API 1、普通 UI 1、critical UI 1）由独立 Codex Execution Worker 执行、另一独立 Result Reviewer 复核；全部 Expected 与脚本、Runner 报告、截图/录屏完成 hash 绑定。Run 级 `test-result-review/scripts/final_review.py` 返回 `ok=true`、3 Cases、`conclusion=ready`；Router 已绑定真实 Final Review 文件并进入 `closed`。
+- Contract 修正：Runtime 不再要求原样官方 Runner JSON 报告带 API 请求响应的 `redacted:true`；单独的 request/response JSON 仍必须声明脱敏。针对该边界的 Runtime Contract 验证为 15 passed。
+- 全新 Claude Code 前向验收：Run `.phase6-forward/fresh-project/work/test-runs/PHASE6-CLAUDE-002`，主会话 UUID `78a70fb9-7812-490b-81a5-43ed2337357d`。主会话原始 stream 中记录到两次有序且不同类型的真实 Agent tool 调用与宿主完成事件：`test-execution-worker` Agent `a3b3b4bffbb1f6316` 完成后，才派发 `test-result-reviewer` Agent `a647bb808ce9de874`。Reviewer 独立确认 API/Vitest 与两条 UI/Playwright Case 全部 PASS；验证脚本先于首次 Case 运行、哈希一致、关键 UI 前后截图不同且录屏有效。
+- 前向验收完整账本：`.phase6-forward/fresh-project/work/test-runs/PHASE6-CLAUDE-002/final-ledger.md`；实际 Agent 调用证据：`.phase6-forward/fresh-project/work/test-runs/PHASE6-CLAUDE-002/runner-results/claude-main-stream.jsonl`。所有本轮修改/运行均限于当前仓库隔离 fixture，未改真实业务项目或全局 Skill 安装目录。
+- Phase 7 不在本次授权范围内：只有用户明确确认当前仓库版本满意并授权覆盖同步后，才可修改全局 Skill 安装目录。
+
+### Phase 0–6 独立复核与修正（2026-09-24）
+
+- 全量 `python -m pytest -q`：91 passed、1 skipped（Windows 未授予创建文件 symlink 的权限；目录 junction 用例通过）；Phase 6 正式 Router Run 经 `workspace_validate.py` 返回 `ok=true, issues=[]`，当前 `final_review.py` 重验 3 个 Case 得到 `conclusion=ready`。
+- Phase 4 局部 Retest 实际证据位于 `.phase3-smoke/project-20260923-145036-374957/work/test-runs/PHASE4-RUNTIME-SMOKE`，包含新 Worker、自审、独立 Reviewer 和结果哈希绑定。
+- Phase 5 两个历史 Run 确有并行 Batch、PASS_AFTER_FIX 和 BLOCKED 恢复链路，但二者当前 Final Review 都因 Router 缺少 `test_cases_self_review_passed` / `test_cases_confirmed` 标记而拒绝；旧状态中的 `closed/passed` 不替代当前 Contract 复核。历史 Run 保持原样，Phase 5 需用当前 Contract 重新验收。
+- Bootstrap 安全修正：写入前整体检查 Agent/TypeScript 公共骨架及 `.test-workflow` 索引/配置目标；拒绝 symlink/junction 和普通文件祖先路径，拒绝非本工具归属标记或不完整配置，也拒绝新项目已有非本 Skill 文件、索引/profile 或升级时本地修改的受管文件。仅接受明确标记为 `test-project-bootstrap` 的新版 Profile；无标记旧 Profile 不迁移、不覆盖，遵循不保留旧执行契约兼容层的冻结决策。补充归属标记篡改、旧 Profile 拒绝、后置冲突预检、普通文件父路径及链接测试；一般磁盘/权限等写入期故障不承诺跨文件事务回滚。
+- Phase 0–6 独立复核阶段未修改全局 Skill 安装目录或真实业务项目；Phase 7 的 Codex/Gemini 覆盖见下方记录。
+
+### Phase 7 Codex/Gemini 覆盖记录（2026-09-24）
+
+- 按用户明确指示，将仓库内 10 个 Skill 镜像覆盖至 `C:\Users\17381\.codex\skills` 与 `C:\Users\17381\.gemini\config\skills`；Claude 目录未修改。
+- 覆盖前将两处目标中已存在的 8 个同名 Skill 分别备份至 `C:\Users\17381\Desktop\测试Skill全局覆盖备份-20260924\codex` 与 `...\gemini`，并逐文件校验备份 SHA-256。
+- 覆盖后逐文件比对：Codex 99 个文件、Gemini 99 个文件，均为 0 缺失、0 多余、0 Hash 差异；Gemini `test-case-design` 目标端独有的旧 `__pycache__` 已在镜像中清理。其他不在本次范围内的 Skill 目录保持不变。
+
+### Phase 7 只读目标目录盘点（2026-09-23）
+
+只读检查发现本机有三个候选全局 Skill 根目录，计划没有指定其中哪一个作为 Phase 7 目标：
+
+| 候选目录 | 当前目录数 | 本仓库 10 个 Skill 已存在 | 缺少 | 其他 Skill | 同名目录中哈希不同文件 | 源端有而目标没有 | 目标端独有文件 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `C:\Users\17381\.claude\skills` | 62 | 8 | `test-point-design`、`test-project-bootstrap` | 54 | 34 | 26 | 0 |
+| `C:\Users\17381\.agents\skills` | 61 | 6 | `test-defect-handling`、`test-execution-planning`、`test-point-design`、`test-project-bootstrap` | 55 | 29 | 24 | 0 |
+| `C:\Users\17381\.codex\skills` | 69 | 8 | `test-point-design`、`test-project-bootstrap` | 61 | 32 | 26 | 0 |
+
+对各候选目录中与仓库同名的 Skill 做了递归路径及 SHA-256 只读比较：所有同名目录都与仓库版本不同；没有发现目标同名 Skill 中存在仓库源目录没有的额外文件。未修改或删除上述任一全局文件。Phase 7 需要用户明确指定目标根目录、确认仓库版本可覆盖后，才能按计划执行镜像同步；不得将三个候选目录合并处理。
 
 ## 1. 这次改造要解决什么
 
