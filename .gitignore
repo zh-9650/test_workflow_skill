@@ -2,5 +2,4 @@ __pycache__/
 .pytest_cache/
 node_modules/
 test-results/
-.phase3-smoke/
-.phase4-smoke/
+.phase*/
