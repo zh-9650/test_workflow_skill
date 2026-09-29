@@ -1,0 +1,203 @@
+{
+  "batch_id": "B02",
+  "status": "completed",
+  "precheck": {
+    "status": "ready",
+    "reason": "precheck passed"
+  },
+  "task_ref": "internal\\execution\\tasks\\B02-task.json",
+  "worker_results_ref": "internal\\execution\\results\\B02-worker-results.json",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B02-worker-self-review.json",
+  "worker_self_review": {
+    "status": "passed",
+    "task_id": "B02-1a41d7ec3c93",
+    "input_task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69",
+    "agent_session_id": "/root/phase5_b02_execution_worker_run2",
+    "results_sha256": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+    "checked_case_ids": [
+      "TC-API-READ-ISOLATED"
+    ],
+    "checks": {
+      "all_cases_checked": true,
+      "all_expected_checked": true,
+      "execution_method_checked": true,
+      "evidence_binding_checked": true,
+      "failure_classification_checked": true,
+      "file_cleanup_checked": true
+    },
+    "findings": [
+      "The only Case in the frozen B02 Task was executed by its planned TypeScript/Vitest script through framework/api-client.ts, which uses Node native fetch. npm run typecheck passed before execution. The final script hash remained a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf and is bound to the result and official report.",
+      "The official Vitest report records one passing test. The redacted request/response Evidence records exactly GET http://127.0.0.1:4174/api/items/control-001 and HTTP 200 with id=control-001, name=Independent read control, state=ready. The Expected is satisfied by the exact returned id/name and the planned read-only GET; no write request was issued. The runner report is attached to the Expected and its hash matches the official-run binding.",
+      "The result binds the actual dispatched Worker session /root/phase5_b02_execution_worker_run2, frozen Task id/hash, Case, Expected, final script hash, request/response Evidence, official Vitest report, and runner exit code 0. No Reviewer was dispatched or authored by this Worker."
+    ],
+    "artifact_sha256": {
+      "script": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+      "api_evidence": "1ec24f1fcfb389c9876f1bb4ab0ed7fcebe533104fb3f2a22c2e8ab57cc02af17",
+      "vitest_report": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28",
+      "worker_results": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323"
+    }
+  },
+  "worker_dispatch_receipt": {
+    "agent_role": "execution_worker",
+    "task_id": "B02-1a41d7ec3c93",
+    "task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69",
+    "agent_session_id": "/root/phase5_b02_execution_worker_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b02_execution_worker_run2",
+    "started_at": "2026-09-24T07:26:33Z",
+    "accepted_at": "2026-09-24T07:26:47.899835+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:29:53.768532+00:00",
+    "result_status": {
+      "overall": "PASS",
+      "cases": {
+        "TC-API-READ-ISOLATED": "PASS"
+      }
+    },
+    "outputs": {
+      "internal\\execution\\results\\B02-worker-results.json": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+      "internal\\execution\\dispatch\\B02-worker-self-review.json": "656628a22f20af8ca20ef8d8b68d9e6794fe86303f4cc3d3efbe6cc04bf4a9fe"
+    }
+  },
+  "reviewer_task_ref": "internal\\execution\\dispatch\\B02-reviewer-task.json",
+  "reviewer_dispatch_receipt": {
+    "agent_role": "result_reviewer",
+    "task_id": "B02-reviewer-001",
+    "task_hash": "e46396e75c8aa4918c71107699443acf9d932da254cd26c0caa0623ea348bbd4",
+    "agent_session_id": "/root/phase5_b02_result_reviewer_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b02_result_reviewer_run2",
+    "started_at": "2026-09-24T07:30:07Z",
+    "accepted_at": "2026-09-24T07:30:25.578703+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:31:46.889241+00:00",
+    "result_status": "passed",
+    "outputs": {
+      "internal/execution/reviews/B02-reviewer-result.json": "8d9321985a6400980499fc8d38e94c96b8f63cc4fd161430245ab730f99b3c0e"
+    }
+  },
+  "reviewer": {
+    "schema_version": 2,
+    "reviewer_task_id": "B02-reviewer-001",
+    "input_task_hash": "e46396e75c8aa4918c71107699443acf9d932da254cd26c0caa0623ea348bbd4",
+    "input_results_sha256": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+    "agent_session_id": "/root/phase5_b02_result_reviewer_run2",
+    "status": "passed",
+    "checked_case_ids": [
+      "TC-API-READ-ISOLATED"
+    ],
+    "retest_case_ids": [],
+    "return_stage": null,
+    "checks": {
+      "completeness_checked": true,
+      "method_consistency_checked": true,
+      "judgement_checked": true,
+      "evidence_checked": true,
+      "abnormal_classification_checked": true
+    },
+    "findings": [
+      "The frozen Reviewer Task binds Worker session /root/phase5_b02_execution_worker_run2, task B02-1a41d7ec3c93, the Worker results SHA-256, the self-review SHA-256, and the Case artifact snapshot manifest. Runtime will independently revalidate these frozen bindings when accepting this review.",
+      "The formal script scripts/api/B02/TC-API-READ-ISOLATED.test.ts was created at 2026-09-24T07:27:14Z and last written at 2026-09-24T07:27:19Z, before the official Vitest report start time 2026-09-24T07:28:08.976Z. It uses the shared API client whose implementation calls Node global fetch, and contains a single request: GET /api/items/control-001. No temporary AI-driven operation substitutes for the formal run.",
+      "The Vitest report names the exact formal script path and records one passing assertion with exit code 0; its recorded SHA-256 matches both the Worker result official-run binding and frozen artifact snapshot. The redacted request/response snapshot records GET http://127.0.0.1:4174/api/items/control-001 and HTTP 200 with id=control-001 and name=Independent read control, matching the confirmed Case Expected.",
+      "The synthetic server source seeds control-001 before requests. Its GET /api/items/:id branch performs only items.get and sends the result; it does not call Map.set or otherwise mutate the catalog. The frozen request evidence contains only GET with no body, and the formal script contains no additional request. For this synthetic fixture, the planned no-state-change assertion is supported by both the sole observed request and the inspected read-only implementation.",
+      "The result is correctly classified PASS with reason_type=none, actual_execution=API, and the planned Vitest/node-native-fetch method. I found no evidence of execution-method substitution, missing Expected coverage, mismatched id/name, report/evidence drift, or unhandled abnormal classification."
+    ]
+  },
+  "review_history": [
+    {
+      "type": "initial_or_batch_review",
+      "review": {
+        "schema_version": 2,
+        "reviewer_task_id": "B02-reviewer-001",
+        "input_task_hash": "e46396e75c8aa4918c71107699443acf9d932da254cd26c0caa0623ea348bbd4",
+        "input_results_sha256": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+        "agent_session_id": "/root/phase5_b02_result_reviewer_run2",
+        "status": "passed",
+        "checked_case_ids": [
+          "TC-API-READ-ISOLATED"
+        ],
+        "retest_case_ids": [],
+        "return_stage": null,
+        "checks": {
+          "completeness_checked": true,
+          "method_consistency_checked": true,
+          "judgement_checked": true,
+          "evidence_checked": true,
+          "abnormal_classification_checked": true
+        },
+        "findings": [
+          "The frozen Reviewer Task binds Worker session /root/phase5_b02_execution_worker_run2, task B02-1a41d7ec3c93, the Worker results SHA-256, the self-review SHA-256, and the Case artifact snapshot manifest. Runtime will independently revalidate these frozen bindings when accepting this review.",
+          "The formal script scripts/api/B02/TC-API-READ-ISOLATED.test.ts was created at 2026-09-24T07:27:14Z and last written at 2026-09-24T07:27:19Z, before the official Vitest report start time 2026-09-24T07:28:08.976Z. It uses the shared API client whose implementation calls Node global fetch, and contains a single request: GET /api/items/control-001. No temporary AI-driven operation substitutes for the formal run.",
+          "The Vitest report names the exact formal script path and records one passing assertion with exit code 0; its recorded SHA-256 matches both the Worker result official-run binding and frozen artifact snapshot. The redacted request/response snapshot records GET http://127.0.0.1:4174/api/items/control-001 and HTTP 200 with id=control-001 and name=Independent read control, matching the confirmed Case Expected.",
+          "The synthetic server source seeds control-001 before requests. Its GET /api/items/:id branch performs only items.get and sends the result; it does not call Map.set or otherwise mutate the catalog. The frozen request evidence contains only GET with no body, and the formal script contains no additional request. For this synthetic fixture, the planned no-state-change assertion is supported by both the sole observed request and the inspected read-only implementation.",
+          "The result is correctly classified PASS with reason_type=none, actual_execution=API, and the planned Vitest/node-native-fetch method. I found no evidence of execution-method substitution, missing Expected coverage, mismatched id/name, report/evidence drift, or unhandled abnormal classification."
+        ]
+      },
+      "reviewer_task_hash": "e46396e75c8aa4918c71107699443acf9d932da254cd26c0caa0623ea348bbd4"
+    }
+  ],
+  "retest_history": [],
+  "retest_tasks": [],
+  "active_retest": null,
+  "partial_case_results": {
+    "TC-API-READ-ISOLATED": {
+      "schema_version": 2,
+      "case_id": "TC-API-READ-ISOLATED",
+      "status": "PASS",
+      "actual_execution": "API",
+      "reason_type": "none",
+      "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+      "actual": "The official TypeScript/Vitest script issued only GET /api/items/control-001. The service returned HTTP 200 with id=control-001, name=Independent read control, and state=ready, matching the pre-seeded control. The request used the planned read-only GET endpoint; no write request was sent.",
+      "reproduced": true,
+      "evidence_refs": [
+        "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json",
+        "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json"
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-READ-ISOLATED",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "actual": "HTTP 200 returned id=control-001, name=Independent read control, state=ready. The recorded request is GET /api/items/control-001, so the planned read action made no catalog write.",
+          "result": "pass",
+          "evidence_refs": [
+            "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json",
+            "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json"
+          ]
+        }
+      ],
+      "automation_run": {
+        "script_ref": "scripts/api/B02/TC-API-READ-ISOLATED.test.ts",
+        "script_sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "static_check": "passed",
+        "debug_attempts": [],
+        "official_run": {
+          "run_id": "vitest-B02-TC-API-READ-ISOLATED-20260924T072808Z",
+          "started_at": "2026-09-24T07:28:08.976Z",
+          "finished_at": "2026-09-24T07:28:09.217Z",
+          "exit_code": 0,
+          "script_sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+          "report_ref": "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json",
+          "report_sha256": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28"
+        }
+      },
+      "task_id": "B02-1a41d7ec3c93",
+      "task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69",
+      "agent_session_id": "/root/phase5_b02_execution_worker_run2"
+    }
+  },
+  "current_case": null,
+  "current_worker": null,
+  "case_result_ledger_ref": "internal/execution/results/case-results-ledger.json",
+  "worker_receipt_ref": "internal\\execution\\dispatch\\B02-worker-receipt.json",
+  "case_started_at": "2026-09-24T07:27:54.449912+00:00",
+  "last_completed_case": "TC-API-READ-ISOLATED",
+  "frozen_results_sha256": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+  "frozen_artifact_sha256": {
+    "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json": "1ec24f1fcfb389c9876f1bb4ab0ed7fceb533104fb3f2a22c2e8ab57cc02af17",
+    "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28",
+    "scripts/api/B02/TC-API-READ-ISOLATED.test.ts": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf"
+  },
+  "reviewer_receipt_ref": "internal\\execution\\dispatch\\B02-reviewer-receipt.json"
+}

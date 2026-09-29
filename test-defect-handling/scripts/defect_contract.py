@@ -56,15 +56,64 @@ def validate(v):
     if dc['result']=='new':
         if sub.get('status')=='not_submitted_existing': fail('submission.status','new bug cannot use not_submitted_existing')
         if sub.get('status')=='submitted' and not sub.get('bug_ref'): fail('submission.bug_ref','required after submitted')
+        if sub.get('status')=='failed' and sub.get('bug_ref'): fail('submission.bug_ref','failed submission must not declare bug_ref')
     else:
         if sub.get('status')!='not_submitted_existing': fail('submission.status','existing bug must use not_submitted_existing')
         if sub.get('bug_ref')!=dc.get('existing_bug_ref'): fail('submission.bug_ref','must equal existing_bug_ref')
-    return {'ok':True,'defect_id':v['defect_id'],'bug_ref':dc.get('existing_bug_ref') or sub.get('bug_ref')}
+    return {'ok':True,'defect_id':v['defect_id'],'submission_status':sub.get('status'),'bug_ref':dc.get('existing_bug_ref') or sub.get('bug_ref')}
 
 def _baseline_case_map(plan):
     rows={c.get('case_id'):c for c in plan.get('cases',[])}
     if None in rows: fail('execution_plan.cases','case_id required')
     return rows
+
+def _assert_task_matches_plan(task,batch_id,case_ids,planned,path):
+    task_rows={c.get('case_id'):c for c in task.get('cases',[]) if isinstance(c,dict)}
+    if (task.get('batch_id')!=batch_id or task.get('case_order')!=case_ids or
+            set(task_rows)!=set(case_ids) or len(task_rows)!=len(task.get('cases',[]))):
+        fail(path,'frozen Worker Task Case scope/order must exactly match the confirmed Execution Plan Batch')
+    for cid in case_ids:
+        if task_rows[cid]!=planned[cid]:
+            fail(f'{path}.cases[{cid}]','frozen Worker Task Case must exactly match the confirmed Execution Plan Case')
+
+def _load_reviewed_runtime_batch(run_dir,batch_id,plan_batch,planned,final_mod,worker_mod,reviewer_mod,runtime_mod,run_sessions):
+    base=Path(run_dir).resolve(); p=f'runtime_batches[{batch_id}]'; state_path=base/'internal/execution/runtime-state'/f'{batch_id}-state.json'
+    if not state_path.is_file(): fail(f'{p}.runtime_state',f'missing completed Runtime state for planned Batch {batch_id}')
+    state=json.loads(state_path.read_text(encoding='utf-8'))
+    if state.get('batch_id')!=batch_id or state.get('status')!='completed':
+        fail(f'{p}.runtime_state','must be the completed state for the planned Batch')
+    task_path,task=final_mod._run_json(base,state.get('task_ref',''),f'{p}.task_ref')
+    planned_ids=plan_batch.get('case_ids',[])
+    planned_rows={cid:planned[cid] for cid in planned_ids if cid in planned}
+    _assert_task_matches_plan(task,batch_id,planned_ids,planned,f'{p}.task_ref')
+    _,initial_results=final_mod._run_json(base,state.get('worker_results_ref',''),f'{p}.worker_results_ref')
+    final_mod._validate_runtime_receipts(base,batch_id,state,task,initial_results,worker_mod,reviewer_mod,runtime_mod,run_sessions)
+
+    # Local retests are Runtime Worker Tasks too; their scope may be a subset,
+    # but every frozen Case must remain identical to the confirmed plan.
+    for index,entry in enumerate(state.get('retest_history',[])):
+        if entry.get('mode')=='product_regression': continue
+        rtask_path,rtask=final_mod._run_json(base,entry.get('task_ref',''),f'{p}.retest_history[{index}].task_ref')
+        retest_ids=rtask.get('case_order',[])
+        if not retest_ids or any(cid not in planned_ids for cid in retest_ids):
+            fail(f'{p}.retest_history[{index}].task_ref','local Retest Case scope must be a non-empty subset of confirmed Batch scope')
+        _assert_task_matches_plan(rtask,batch_id,retest_ids,planned,f'{p}.retest_history[{index}].task_ref')
+
+    results_ref=state.get('final_results_ref') or state.get('worker_results_ref')
+    _,canonical_results=final_mod._run_json(base,results_ref,f'{p}.final_results_ref')
+    if not isinstance(canonical_results,list): fail(f'{p}.final_results_ref','Runtime result list required')
+    canonical_by={result.get('case_id'):result for result in canonical_results if isinstance(result,dict)}
+    if len(canonical_by)!=len(canonical_results) or set(canonical_by)!=set(planned_ids):
+        fail(f'{p}.final_results_ref','unique Runtime results must exactly match the confirmed plan Batch scope')
+    for entry in state.get('retest_history',[]):
+        review=entry.get('review') or {}
+        if review.get('status')!='passed' or entry.get('mode')=='product_regression': continue
+        _,retest_results=final_mod._run_json(base,entry.get('results_ref',''),f'{p}.retest_history.results_ref')
+        if not isinstance(retest_results,list): fail(f'{p}.retest_history.results_ref','Runtime result list required')
+        for result in retest_results: canonical_by[result.get('case_id')]=result
+    for cid in planned_ids:
+        final_mod._validate_case_result_snapshot(base,planned_rows[cid],canonical_by.get(cid,{}),{batch_id:state},runtime_mod)
+    return state,canonical_by,task
 
 def _validate_regression_runtime(regression,baseline_plan,run_dir):
     base=Path(run_dir).resolve(); runtime_refs=regression.get('runtime_evidence')
@@ -157,6 +206,28 @@ def validate_reg(v,baseline_plan,evidence_root=None):
     baseline=_baseline_case_map(baseline_plan)
     unknown=required_ids-set(baseline)
     if unknown: fail('cases',f'regression scope must come from confirmed execution plan: {sorted(unknown)}')
+    target_env = v.get('target_environment') or v.get('target_env')
+    planned_env = baseline_plan.get('target_environment')
+    if planned_env and isinstance(planned_env, dict):
+        expected_env_id = planned_env.get('env_id')
+        if target_env and target_env != expected_env_id:
+            fail('target_environment', f'regression target_environment {target_env} does not match planned env {expected_env_id}')
+    dep_version = v.get('deployment_version')
+    if dep_version is not None:
+        if not isinstance(dep_version, str) or not dep_version.strip():
+            fail('deployment_version', 'non-empty deployment_version required')
+    dep_event = v.get('deployment_event_ref')
+    if dep_event is not None and not dep_event:
+        fail('deployment_event_ref', 'deployment_event_ref cannot be empty')
+    impact = v.get('impact_analysis')
+    if impact is not None:
+        if not isinstance(impact, dict):
+            fail('impact_analysis', 'impact_analysis must be an object')
+        if 'old_pass_retest_needed' in impact and not isinstance(impact['old_pass_retest_needed'], bool):
+            fail('impact_analysis.old_pass_retest_needed', 'boolean required')
+        if 'affected_pass_cases' in impact and not isinstance(impact['affected_pass_cases'], list):
+            fail('impact_analysis.affected_pass_cases', 'list of case IDs required')
+
     # Regression is not allowed to redefine the original Case or primary execution method.
     for c in cases:
         cid=c['case_id']; base=baseline[cid]
@@ -187,47 +258,77 @@ def _write_ledger(path,ledger):
     tmp=path.with_suffix(path.suffix+'.tmp'); tmp.write_text(json.dumps(ledger,ensure_ascii=False,indent=2)+'\n',encoding='utf-8'); tmp.replace(path)
 
 def apply_defect_to_ledger(run_dir,v):
-    out=validate(v); bug=out['bug_ref']; path,ledger=_load_ledger(run_dir); rows=ledger.setdefault('cases',{})
+    out=validate(v); bug=out.get('bug_ref')
+    sub=v.get('submission',{})
+    if sub.get('status')=='failed' or not bug or not str(bug).strip():
+        fail('submission.status',f'cannot apply defect {v.get("defect_id")} to ledger when submission status is failed or bug_ref is empty')
+    path,ledger=_load_ledger(run_dir); rows=ledger.setdefault('cases',{})
     _,plan=_load_confirmed_plan(run_dir); planned=_baseline_case_map(plan)
-    runtime_path=Path(run_dir)/'internal/execution/runtime-state'/f'{v["source_batch"]}-state.json'
-    if not runtime_path.is_file(): fail('source_batch.runtime_state','completed Runtime state is required to submit a formal Bug')
-    runtime_state=json.loads(runtime_path.read_text(encoding='utf-8'))
-    result_ref=runtime_state.get('final_results_ref') or runtime_state.get('worker_results_ref')
-    if runtime_state.get('status')!='completed' or not result_ref: fail('source_batch.runtime_state','completed Worker/Reviewer Runtime evidence is required')
-    runtime_results=json.loads((Path(run_dir)/result_ref).read_text(encoding='utf-8'))
-    runtime_root=Path(__file__).resolve().parents[2]/'test-execution-runtime/scripts'
-    import sys
-    if str(runtime_root) not in sys.path: sys.path.insert(0,str(runtime_root))
-    runtime_mod=_load(runtime_root/'runtime_orchestrator.py','defect_runtime_receipt_validation')
-    worker_mod=_load(runtime_root/'worker_review.py','defect_worker_receipt_validation')
-    reviewer_mod=_load(runtime_root/'reviewer_contract.py','defect_reviewer_receipt_validation')
-    final_mod=_load(Path(__file__).resolve().parents[2]/'test-result-review/scripts/final_review.py','defect_final_receipt_validation')
-    initial_task=json.loads((Path(run_dir)/runtime_state['task_ref']).read_text(encoding='utf-8'))
-    final_mod._validate_runtime_receipts(Path(run_dir).resolve(),v['source_batch'],runtime_state,initial_task,runtime_results,worker_mod,reviewer_mod,runtime_mod)
-    # Rebuild the Runtime result currently accepted for each Case. The merged
-    # final-results file covers ordinary local retests, while resume-after-
-    # regression attempts update the ledger without replacing that file.
-    # Product regressions are separate Bug-fix judgments and must not replace
-    # the Runtime source result. Older attempts remain audit history only.
-    runtime_by={result.get('case_id'):result for result in runtime_results}
-    for entry in runtime_state.get('retest_history',[]):
-        review=entry.get('review') or {}
-        if review.get('status')!='passed' or entry.get('mode')=='product_regression':
-            continue
-        ref=entry.get('results_ref')
-        if not ref: fail('source_batch.runtime_state.retest_history.results_ref','accepted local retest must reference immutable results')
-        for result in json.loads((Path(run_dir)/ref).read_text(encoding='utf-8')):
-            runtime_by[result.get('case_id')]=result
-    roots=[]
+    plan_batches={b.get('id'):b for b in plan.get('batches',[]) if isinstance(b,dict)}
+    source_plan_batch=plan_batches.get(v['source_batch'])
+    if not source_plan_batch: fail('source_batch','must exist in the confirmed Execution Plan')
     for cid in v['source_cases']:
-        if cid not in rows: fail(f'case_result_ledger.{cid}','defect source case is not initialized in ledger')
-        item=rows[cid]
-        if item.get('reviewer_confirmed') is not True or (item.get('final_result') or item.get('status'))!='FAIL':
-            fail(f'case_result_ledger.{cid}','formal defect source must be a reviewer-confirmed FAIL')
-        if item.get('batch_id')!=v['source_batch']: fail(f'case_result_ledger.{cid}.batch_id','does not match defect source_batch')
-        if not isinstance(item.get('runtime_result'),dict) or item['runtime_result'].get('status')!='FAIL': fail(f'case_result_ledger.{cid}.runtime_result','real initial FAIL runtime result required')
-        if runtime_by.get(cid)!=item['runtime_result']: fail(f'case_result_ledger.{cid}.runtime_result','must exactly match the latest canonical frozen Runtime result accepted by the independent Reviewer')
-        roots.append((Path(run_dir)/'evidence'/v['source_batch']/cid).resolve())
+        if cid not in planned or planned[cid].get('batch_id')!=v['source_batch']:
+            fail(f'execution_plan.cases[{cid}].batch_id','source Case must belong to source_batch in the confirmed Execution Plan')
+    source_kind = v.get('source_kind', 'runtime_case_fail')
+    if source_kind not in {'runtime_case_fail', 'data_readiness'}:
+        fail('source_kind', 'must be runtime_case_fail or data_readiness')
+
+    roots=[]
+    if source_kind == 'runtime_case_fail':
+        runtime_path=Path(run_dir)/'internal/execution/runtime-state'/f'{v["source_batch"]}-state.json'
+        if not runtime_path.is_file(): fail('source_batch.runtime_state','completed Runtime state is required to submit a formal Bug')
+        runtime_state=json.loads(runtime_path.read_text(encoding='utf-8'))
+        result_ref=runtime_state.get('final_results_ref') or runtime_state.get('worker_results_ref')
+        if runtime_state.get('status')!='completed' or not result_ref: fail('source_batch.runtime_state','completed Worker/Reviewer Runtime evidence is required')
+        runtime_root=Path(__file__).resolve().parents[2]/'test-execution-runtime/scripts'
+        import sys
+        if str(runtime_root) not in sys.path: sys.path.insert(0,str(runtime_root))
+        runtime_mod=_load(runtime_root/'runtime_orchestrator.py','defect_runtime_receipt_validation')
+        worker_mod=_load(runtime_root/'worker_review.py','defect_worker_receipt_validation')
+        reviewer_mod=_load(runtime_root/'reviewer_contract.py','defect_reviewer_receipt_validation')
+        final_mod=_load(Path(__file__).resolve().parents[2]/'test-result-review/scripts/final_review.py','defect_final_receipt_validation')
+        run_sessions=set()
+        runtime_cache={v['source_batch']:_load_reviewed_runtime_batch(Path(run_dir).resolve(),v['source_batch'],source_plan_batch,planned,final_mod,worker_mod,reviewer_mod,runtime_mod,run_sessions)}
+        runtime_state,runtime_by,_=runtime_cache[v['source_batch']]
+        for cid in v['source_cases']:
+            if cid not in rows: fail(f'case_result_ledger.{cid}','defect source case is not initialized in ledger')
+            item=rows[cid]
+            if item.get('reviewer_confirmed') is not True or (item.get('final_result') or item.get('status'))!='FAIL':
+                fail(f'case_result_ledger.{cid}','formal defect source must be a reviewer-confirmed FAIL')
+            if item.get('batch_id')!=v['source_batch']: fail(f'case_result_ledger.{cid}.batch_id','does not match defect source_batch')
+            if not isinstance(item.get('runtime_result'),dict) or item['runtime_result'].get('status')!='FAIL': fail(f'case_result_ledger.{cid}.runtime_result','real initial FAIL runtime result required')
+            if runtime_by.get(cid)!=item['runtime_result']: fail(f'case_result_ledger.{cid}.runtime_result','must exactly match the latest canonical frozen Runtime result accepted by the independent Reviewer')
+            roots.append((Path(run_dir)/'evidence'/v['source_batch']/cid).resolve())
+    else:
+        # data_readiness source_kind: cases are unexecuted / BLOCKED by data readiness failure
+        runtime_cache = {}
+        data_review = v.get('data_readiness_review')
+        if not data_review and v.get('data_readiness_review_ref'):
+            rev_path = (Path(run_dir) / v['data_readiness_review_ref']).resolve()
+            if rev_path.is_file():
+                data_review = json.loads(rev_path.read_text(encoding='utf-8'))
+        if not isinstance(data_review, dict):
+            fail('data_readiness_review', 'independent Reviewer review artifact or receipt required for data readiness defect')
+        if data_review.get('status') != 'passed':
+            fail('data_readiness_review.status', 'must be passed by independent Reviewer')
+        if not data_review.get('reviewer_session_id'):
+            fail('data_readiness_review.reviewer_session_id', 'independent Reviewer session identity required')
+
+        for cid in v['source_cases']:
+            if cid not in rows: fail(f'case_result_ledger.{cid}','defect source case is not initialized in ledger')
+            item=rows[cid]
+            item_status = item.get('final_result') or item.get('status')
+            if item_status not in {'BLOCKED', 'PENDING', 'NOT_EXECUTED'}:
+                fail(f'case_result_ledger.{cid}', 'data_readiness bug source case must be BLOCKED or unexecuted, not fake FAIL')
+            item['source_kind'] = 'data_readiness'
+            item['status'] = 'BLOCKED'
+            item['final_result'] = 'BLOCKED'
+            item['reviewer_confirmed'] = True
+            item['data_readiness_review'] = data_review
+            item['blocked_reason'] = data_review.get('blocked_reason') or v['payload'].get('title')
+            roots.append((Path(run_dir)/'evidence'/v['source_batch']).resolve())
+
     for cid in v.get('blocked_case_ids',[]):
         item=rows.get(cid)
         if not item or item.get('reviewer_confirmed') is not True or (item.get('final_result') or item.get('status'))!='BLOCKED':
@@ -235,10 +336,48 @@ def apply_defect_to_ledger(run_dir,v):
         runtime=item.get('runtime_result')
         if not isinstance(runtime,dict) or runtime.get('status')!='BLOCKED' or runtime.get('blocked_reason_type')!='upstream_case':
             fail(f'blocked_case_ids[{cid}]','must preserve Runtime BLOCKED(upstream_case) evidence')
-        if runtime_by.get(cid)!=runtime: fail(f'blocked_case_ids[{cid}].runtime_result','must exactly match the latest canonical frozen Runtime result accepted by the independent Reviewer')
+        planned_case=planned.get(cid)
+        blocked_batch=planned_case.get('batch_id') if planned_case else None
+        if (not blocked_batch or item.get('batch_id')!=blocked_batch or
+                not plan_batches.get(blocked_batch) or cid not in plan_batches[blocked_batch].get('case_ids',[])):
+            fail(f'blocked_case_ids[{cid}].batch_id','ledger Case Batch must match the confirmed Execution Plan')
+        if blocked_batch not in runtime_cache:
+            runtime_cache[blocked_batch]=_load_reviewed_runtime_batch(Path(run_dir).resolve(),blocked_batch,plan_batches[blocked_batch],planned,final_mod,worker_mod,reviewer_mod,runtime_mod,run_sessions)
+        blocked_state,blocked_results,blocked_task=runtime_cache[blocked_batch]
+        canonical_runtime=blocked_results.get(cid)
+        if canonical_runtime!=runtime: fail(f'blocked_case_ids[{cid}].runtime_result','must exactly match the latest canonical frozen Runtime result accepted by the independent Reviewer')
         dependencies=set(planned.get(cid,{}).get('dependencies',[]) or [])
         if not dependencies.intersection(v['source_cases']):
             fail(f'blocked_case_ids[{cid}]','must depend directly on one of the Bug source Cases before it can be queued for resume')
+        dependency_context=blocked_task.get('dependency_context',{})
+        for dep in dependencies:
+            dep_case=planned.get(dep); dep_row=rows.get(dep); dep_context=dependency_context.get(dep) if isinstance(dependency_context,dict) else None
+            if not dep_case or not dep_row or dep_row.get('reviewer_confirmed') is not True:
+                fail(f'blocked_case_ids[{cid}].dependency_context.{dep}','must bind a confirmed planned dependency to its reviewed ledger result')
+            dep_batch=dep_case.get('batch_id'); dep_batch_plan=plan_batches.get(dep_batch)
+            if not dep_batch_plan: fail(f'blocked_case_ids[{cid}].dependency_context.{dep}.batch_id','dependency Batch must exist in confirmed plan')
+            if dep_batch==blocked_batch:
+                # Same-Batch dependencies are resolved from the ordered local
+                # Runtime results and are intentionally omitted from the
+                # cross-Batch dependency_context snapshot.
+                dep_result=blocked_results.get(dep)
+                dep_final=dep_row.get('final_result') or dep_row.get('status')
+                dep_runtime=dep_row.get('runtime_result')
+                if (dep_row.get('batch_id')!=dep_batch or not isinstance(dep_runtime,dict) or dep_runtime!=dep_result or
+                        dep_final not in {'FAIL','BLOCKED','PASS','PASS_AFTER_FIX'} or
+                        (dep_result or {}).get('status')!=dep_runtime.get('status')):
+                    fail(f'blocked_case_ids[{cid}].dependency_context.{dep}','same-Batch dependency must match its canonical reviewed Runtime/Ledger result')
+                continue
+            if not isinstance(dep_context,dict):
+                fail(f'blocked_case_ids[{cid}].dependency_context.{dep}','cross-Batch dependency requires its frozen Runtime context')
+            if dep_batch not in runtime_cache:
+                runtime_cache[dep_batch]=_load_reviewed_runtime_batch(Path(run_dir).resolve(),dep_batch,dep_batch_plan,planned,final_mod,worker_mod,reviewer_mod,runtime_mod,run_sessions)
+            _,dep_results,_=runtime_cache[dep_batch]; dep_result=dep_results.get(dep)
+            dep_final=dep_row.get('final_result') or dep_row.get('status')
+            if (dep_row.get('batch_id')!=dep_batch or dep_context.get('case_id') not in (None,dep) or dep_context.get('batch_id')!=dep_batch or
+                    dep_context.get('status')!=(dep_result or {}).get('status') or
+                    dep_context.get('final_result')!=dep_final or dep_row.get('runtime_result')!=dep_result):
+                fail(f'blocked_case_ids[{cid}].dependency_context.{dep}','must exactly match the confirmed plan Batch and canonical reviewed Runtime/Ledger dependency result')
     for ref in v['payload'].get('evidence_refs',[]): _run_evidence_file(run_dir,ref,roots,'payload.evidence_refs')
     ts=_now()
     for cid in v['source_cases']:
@@ -288,9 +427,53 @@ def apply_regression_to_ledger(run_dir,v):
     return {'ok':True,'regression_id':v['regression_id'],'updated_case_ids':sorted(original|impact)}
 
 
+def apply_disposition_to_ledger(run_dir, disp):
+    for k in ['defect_id', 'disposition', 'operator', 'rationale', 'affected_case_ids']:
+        if k not in disp: fail(k, 'required')
+    if disp['disposition'] not in {'postponed', 'wontfix'}:
+        fail('disposition', 'must be postponed or wontfix')
+    path, ledger = _load_ledger(run_dir)
+    rows = ledger.setdefault('cases', {})
+    ts = _now()
+    for cid in disp['affected_case_ids']:
+        if cid not in rows: fail(f'case_result_ledger.{cid}', 'case not found in ledger')
+        item = rows[cid]
+        # Keep status as is (do not convert to PASS!)
+        item['disposition'] = disp['disposition']
+        item['disposition_record'] = {
+            'defect_id': disp['defect_id'],
+            'disposition': disp['disposition'],
+            'operator': disp['operator'],
+            'rationale': disp['rationale'],
+            'timestamp': disp.get('timestamp') or ts,
+            'target_version': disp.get('target_version')
+        }
+        item['updated_at'] = ts
+    ledger['updated_at'] = ts
+    # Atomically apply to dashboard first; if dashboard fails or rejects, ledger is not modified
+    _dashboard(run_dir, {
+        'type': 'defect_disposition_applied',
+        'defect_id': disp['defect_id'],
+        'disposition': disp['disposition'],
+        'case_ids': disp['affected_case_ids'],
+        'stage': 'defect-handling'
+    })
+    _write_ledger(path, ledger)
+    return {'ok': True, 'defect_id': disp['defect_id'], 'disposition': disp['disposition'], 'affected_case_ids': disp['affected_case_ids']}
+
+
 if __name__=='__main__':
-    a=argparse.ArgumentParser(); a.add_argument('--input',required=True); a.add_argument('--type',choices=['bug','regression'],default='bug'); a.add_argument('--apply-run-dir'); a.add_argument('--execution-plan'); x=a.parse_args(); v=json.loads(Path(x.input).read_text(encoding='utf-8'))
+    a=argparse.ArgumentParser()
+    a.add_argument('--input',required=True)
+    a.add_argument('--type',choices=['bug','regression','disposition'],default='bug')
+    a.add_argument('--apply-run-dir')
+    a.add_argument('--execution-plan')
+    x=a.parse_args()
+    v=json.loads(Path(x.input).read_text(encoding='utf-8'))
     if x.type=='bug': out=apply_defect_to_ledger(x.apply_run_dir,v) if x.apply_run_dir else validate(v)
+    elif x.type=='disposition':
+        if not x.apply_run_dir: fail('apply_run_dir','--apply-run-dir required for disposition')
+        out=apply_disposition_to_ledger(x.apply_run_dir,v)
     else:
         if x.apply_run_dir: out=apply_regression_to_ledger(x.apply_run_dir,v)
         else:

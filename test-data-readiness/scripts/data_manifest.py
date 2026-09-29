@@ -82,13 +82,20 @@ def _validate_content(v,plan,run_dir=None):
     if not v.get('batch_id'): fail('batch_id','required')
     batch,plan_cases=_plan_batch(plan,v['batch_id'])
     batch_case_ids={c['case_id'] for c in plan_cases}
+    dr=plan.get('data_requirements')
+    if dr is not None:
+        batch_dr=[item for item in dr if any(cid in batch_case_ids for cid in item.get('case_ids',[])) and item.get('scope') in {'base_resource','batch_dedicated'}]
+        planned_data_needed=len(batch_dr)>0
+        required_case_ids={cid for item in batch_dr for cid in item.get('case_ids',[]) if cid in batch_case_ids}
+    else:
+        planned_data_needed=any(c.get('data_required') is not False for c in plan_cases)
+        required_case_ids={c['case_id'] for c in plan_cases if c.get('data_required') is not False}
     if not isinstance(v.get('data_required'),bool): fail('data_required','boolean required')
     objs=v.get('objects',[])
-    required_case_ids={c['case_id'] for c in plan_cases if c.get('data_required') is not False}
     if v['data_required'] is False:
         if not v.get('reason'): fail('reason','required when data_required=false')
         if objs: fail('objects','must be empty when data_required=false')
-        if required_case_ids: fail('data_required','cannot be false while planned cases still require prepared data; mark those plan cases data_required=false')
+        if planned_data_needed: fail('data_required','cannot be false while planned cases still require prepared data')
     else:
         if not isinstance(objs,list) or not objs: fail('objects','non-empty when data_required=true')
     builders={b.get('builder_id'):b for b in v.get('builders',[])}

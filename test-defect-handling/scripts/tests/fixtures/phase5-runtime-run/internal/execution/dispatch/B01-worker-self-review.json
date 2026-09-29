@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "task_id": "B01-0b83603a329c",
+  "input_task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+  "agent_session_id": "/root/phase5_b01_execution_worker_run2",
+  "results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+  "checked_case_ids": [
+    "TC-API-CREATE-VALID"
+  ],
+  "checks": {
+    "all_cases_checked": true,
+    "all_expected_checked": true,
+    "execution_method_checked": true,
+    "evidence_binding_checked": true,
+    "failure_classification_checked": true,
+    "file_cleanup_checked": true
+  },
+  "findings": [
+    "The only Case in this frozen B01 Task was executed by its planned TypeScript/Vitest script through framework/api-client.ts, which uses Node native fetch. Static typecheck passed before the official run. The final script hash remained a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc and is bound to the result and report.",
+    "The official final Vitest run records one failed assertion: expected HTTP 201, observed HTTP 500. The current-run redacted request/response Evidence independently records the exact planned request and the same 500 response; its top-level redacted=true satisfies the Evidence Contract. The exact official JSON report is attached to the Expected and is within the official run window. Therefore the final Case result is product FAIL, not a runner exit-code inference.",
+    "The first formal attempt also observed HTTP 500, but could not be accepted because the Worker script wrapped the framework Evidence and violated the top-level redacted Contract. That attempt is classified as worker_script_evidence_contract_bug, is not the committed Case result, and its exact script, API evidence, runner report, timestamps, exit code, and hashes are preserved in the Case debug directory. The script was corrected and the final official run used the new stable hash.",
+    "The result binds the actual dispatched worker session /root/phase5_b01_execution_worker_run2, frozen Task id/hash, Case, Expected, final script hash, API evidence, official report, and actual runner timestamps/exit code. The Run scratch directory was empty; the retained debug files are intentional immutable diagnostic evidence, not temporary debris. No Reviewer was dispatched or authored by this Worker."
+  ],
+  "artifact_sha256": {
+    "script": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+    "api_evidence": "55a3523d4ae6ceccf9014832f1e523ee04a76704d583f3d13e2387926c26c6f1",
+    "vitest_report": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5",
+    "worker_results": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76"
+  }
+}

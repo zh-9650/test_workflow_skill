@@ -31,7 +31,7 @@ Runtime 已完成：
 # 2. 完整缺陷流程
 
 ```text
-确认产品问题
+确认产品问题（来源：Runtime 执行失败 或 数据准备受阻）
 ↓
 稳定复现
 ↓
@@ -39,33 +39,26 @@ Runtime 已完成：
 ↓
 整理 Evidence
 ↓
-检查是否已有 Bug
+检查是否已有 Bug（查重）
 ↓
 判断多个 Case 是否同根因
 ↓
-生成 Bug
+生成 Bug（支持已绑定的缺陷平台：禅道、Jira、GitLab、GitHub 等）
 ↓
 AI 自审
 ↓
-提交禅道
+提交缺陷平台 / 关联已有 Bug
 ↓
-Bug ↔ Case ↔ Batch
+Bug ↔ Case ↔ Batch 绑定
 ↓
-判断真正被阻塞的 Case
+判断真正受阻的 Case（标记 BLOCKED）
 ↓
-无影响测试继续
+无影响测试继续（生成阶段快照）
 ↓
-开发修复
+开发修复并部署到目标环境 / 或 用户明确延期/无需修复处置
 ↓
-生成 Regression Task
-↓
-新的 Regression Worker
-↓
-原问题回归
-↓
-必要影响范围回归
-↓
-更新 Bug / Case / 全局结果账本
+[修复分支] 验证部署 → 新 Regression Worker → 原问题及影响回归 → 独立 Reviewer → 解锁受阻 Case
+[处置分支] 用户明确延期/无需修复 → 记录处置理由/操作人/版本 → 移出待回归队列（保留风险，不改 PASS）
 ```
 
 ---
@@ -243,3 +236,20 @@ Regression 仍必须：
 同一个 Regression 跨多个 Batch 时，每个 Batch 分别生成 Runtime Task，并通过相同的 `regression_id` 关联；某个 Batch 仅含影响 Case 时不必伪造初始 FAIL，但 Run 中必须有同一 Bug 关联的 Reviewer-confirmed 初始 FAIL。Regression Reviewer 要求局部重测时必须保留 `product_regression` 模式和 Bug/Regression 标识；结果未通过 Reviewer 前不得更改 Case Ledger。
 
 Regression PASS 只更新本次 Regression Task 中实际执行且通过的原失败/影响 Case。因 Bug 而 BLOCKED、但未包含在 Regression Task 中的下游 Case，只能解除阻塞并进入恢复队列；Router 随后按 Batch 路由到 `data-readiness`，Runtime 重新执行并复核这些 Case。禁止把“依赖已修复”直接等同于“下游 Case 已通过”。
+
+---
+
+# 14. 用户明确延期 / 无需修复处置（Disposition）
+
+当用户在修复沟通过程中明确表示某缺陷“延期修复”或“无需修复”时：
+- 使用命令记录正式处置：
+  ```bash
+  python test-defect-handling/scripts/defect_contract.py \
+    --input <disposition-payload.json> \
+    --type disposition \
+    --apply-run-dir <run-dir>
+  ```
+- 处置记录包含：`defect_id`、`disposition`（`postponed` 或 `wontfix`）、`operator`、`rationale`、`affected_case_ids`、`target_version`；
+- **保留原始 FAIL / BLOCKED 事实，绝不篡改为 PASS**；
+- 该缺陷移出当前 Run 待回归队列，不阻塞最终结案；
+- 最终复核将受影响 Case 计入剩余风险范围，结论给出 `ready_with_risk`。

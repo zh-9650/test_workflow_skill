@@ -1,0 +1,317 @@
+{
+  "schema_version": 2,
+  "confirmed_case_ids": [
+    "TC-API-CREATE-VALID",
+    "TC-API-READ-ISOLATED",
+    "TC-API-CREATE-RECOVER"
+  ],
+  "confirmed_cases_sha256": "36925a85dafed610b94446a9ee7afe9f42653042ab0784ab1f2fa98a2a4456f6",
+  "batches": [
+    {
+      "id": "B01",
+      "goal": "Expose valid-create defect in synthetic fixture",
+      "case_ids": [
+        "TC-API-CREATE-VALID"
+      ],
+      "parallel_safe": true
+    },
+    {
+      "id": "B02",
+      "goal": "Independent API PASS control",
+      "case_ids": [
+        "TC-API-READ-ISOLATED"
+      ],
+      "parallel_safe": true
+    },
+    {
+      "id": "B03",
+      "goal": "Read same deterministic item created by repaired B01 Regression",
+      "case_ids": [
+        "TC-API-CREATE-RECOVER"
+      ],
+      "parallel_safe": false
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "title": "Create valid item",
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item"
+        }
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-CREATE-VALID",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "checkpoint": "final"
+        }
+      ],
+      "target_action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "name": "Phase5 Item"
+      },
+      "template_case_id": "TC-API-CREATE-VALID",
+      "execution_instance_id": "I-TC-API-CREATE-VALID",
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ]
+      },
+      "batch_id": "B01",
+      "primary_execution": "API",
+      "supporting_observations": [],
+      "dependencies": [],
+      "data_required": false,
+      "data_requirement_reason": "No prerequisite business record; the script creates a request-local isolated object as the tested operation.",
+      "automation": {
+        "required": true,
+        "language": "typescript",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "script_target": "scripts/api/B01/TC-API-CREATE-VALID.test.ts",
+        "script_strategy": "create_or_update"
+      },
+      "evidence_plan": {
+        "level": "standard",
+        "screenshots": [],
+        "api": [
+          {
+            "kind": "request_response",
+            "expected_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          }
+        ],
+        "network": [],
+        "files": [
+          {
+            "kind": "runner_report",
+            "expected_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ],
+        "recording": false,
+        "read_back_required": false
+      }
+    },
+    {
+      "case_id": "TC-API-READ-ISOLATED",
+      "title": "Read isolated control item",
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)"
+        }
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-READ-ISOLATED",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "checkpoint": "final"
+        }
+      ],
+      "target_action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "preseeded_control_id": "control-001"
+      },
+      "template_case_id": "TC-API-READ-ISOLATED",
+      "execution_instance_id": "I-TC-API-READ-ISOLATED",
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ]
+      },
+      "batch_id": "B02",
+      "primary_execution": "API",
+      "supporting_observations": [],
+      "dependencies": [],
+      "data_required": false,
+      "data_requirement_reason": "Reads the fixture-preseeded, immutable control-001 record; no pre-execution data preparation and no write operation are required.",
+      "automation": {
+        "required": true,
+        "language": "typescript",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "script_target": "scripts/api/B02/TC-API-READ-ISOLATED.test.ts",
+        "script_strategy": "create_or_update"
+      },
+      "evidence_plan": {
+        "level": "standard",
+        "screenshots": [],
+        "api": [
+          {
+            "kind": "request_response",
+            "expected_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          }
+        ],
+        "network": [],
+        "files": [
+          {
+            "kind": "runner_report",
+            "expected_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ],
+        "recording": false,
+        "read_back_required": false
+      }
+    },
+    {
+      "case_id": "TC-API-CREATE-RECOVER",
+      "title": "Read B01 regression-created item after repair",
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/item-phase5-b01 after reviewer-confirmed B01 Regression PASS"
+        }
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-CREATE-RECOVER",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching B01 Regression result",
+          "checkpoint": "final"
+        }
+      ],
+      "target_action": "GET /api/items/item-phase5-b01 after reviewer-confirmed B01 Regression PASS",
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services.",
+        "Require reviewer-confirmed B01 Regression after repair to have created item-phase5-b01; reuse that same retained fixture object and only read it."
+      ],
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "created_by_case_id": "TC-API-CREATE-VALID"
+      },
+      "template_case_id": "TC-API-CREATE-RECOVER",
+      "execution_instance_id": "I-TC-API-CREATE-RECOVER",
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ]
+          }
+        ]
+      },
+      "batch_id": "B03",
+      "primary_execution": "API",
+      "supporting_observations": [],
+      "dependencies": [
+        "TC-API-CREATE-VALID"
+      ],
+      "data_required": false,
+      "data_requirement_reason": "No Data Readiness pre-creation is requested: B03 reads the exact item created by reviewer-confirmed B01 Regression; Runtime must receive the reviewer-confirmed B01 result and B03's GET is the actual object read-back.",
+      "automation": {
+        "required": true,
+        "language": "typescript",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "script_target": "scripts/api/B03/TC-API-CREATE-RECOVER.test.ts",
+        "script_strategy": "create_or_update"
+      },
+      "evidence_plan": {
+        "level": "standard",
+        "screenshots": [],
+        "api": [
+          {
+            "kind": "request_response",
+            "expected_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ],
+            "redacted": true
+          }
+        ],
+        "network": [],
+        "files": [
+          {
+            "kind": "runner_report",
+            "expected_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ]
+          }
+        ],
+        "recording": false,
+        "read_back_required": false
+      }
+    }
+  ],
+  "self_review": {
+    "status": "passed",
+    "checks": {
+      "all_cases_assigned": true,
+      "execution_method_checked": true,
+      "batch_logic_checked": true,
+      "dependency_checked": true,
+      "evidence_checked": true,
+      "data_strategy_checked": true
+    }
+  },
+  "user_confirmation": {
+    "status": "pending"
+  }
+}

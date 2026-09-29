@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "reviewer_task_id": "B03-reviewer-001",
+  "input_task_hash": "dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5",
+  "input_results_sha256": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+  "agent_session_id": "/root/phase5_b03_result_reviewer_run2",
+  "status": "passed",
+  "checked_case_ids": [
+    "TC-API-CREATE-RECOVER"
+  ],
+  "retest_case_ids": [],
+  "return_stage": null,
+  "checks": {
+    "completeness_checked": true,
+    "method_consistency_checked": true,
+    "judgement_checked": true,
+    "evidence_checked": true,
+    "abnormal_classification_checked": true
+  },
+  "findings": [
+    "Independently checked frozen Reviewer Task B03-reviewer-001 (task hash dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5) and its immutable artifact snapshot manifest. The Worker session is /root/phase5_b03_execution_worker_run2, different from this Reviewer session /root/phase5_b03_result_reviewer_run2. The frozen Worker results SHA-256 is 521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa.",
+    "The B03 Task binds TC-API-CREATE-RECOVER to the planned TypeScript + Vitest + Node native fetch API method and expected GET /api/items/item-phase5-b01, but its frozen dependency_context says TC-API-CREATE-VALID in B01 is status=FAIL, final_result=FAIL, reviewer_confirmed=true. Therefore the target GET was correctly not attempted and the Case is BLOCKED(upstream_case), NOT_EXECUTED; Vitest exit code 0 represents only a passing gate assertion, not a Case PASS.",
+    "The formal script scripts/api/B03/TC-API-CREATE-RECOVER.test.ts is present in the frozen snapshot and has SHA-256 2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520, matching the Reviewer Task, Worker result and official-run binding. It reads the frozen Runtime Task, asserts the exact dependency identity/status/reviewer confirmation, writes blocked_dependency evidence, and has no fetch import or API client/request call. The runner report names this script and reports one passing gate assertion; the bound exit code is 0. The separate gate report is not mistaken for execution of the planned GET.",
+    "Recomputed SHA-256 values match the Reviewer Task snapshot manifest for blocked-dependency evidence (124820b2aa1fbfbc9950ddb638010e2fd3e1f7b898c02ca170e1e95e5b1311aa), Vitest report (68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78), script (2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520), and Worker results (521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa). The live gate evidence equals its immutable snapshot and states request_made=false, target_action_executed=false, affected_by=[TC-API-CREATE-VALID], and dependency result FAIL/reviewer_confirmed=true; these align with the trusted Task dependency_context and Result's affected_by, blocked_reason_type, NOT_EXECUTED and target_action_executed=false.",
+    "The Case has one planned Expected and the result maps that Expected to blocked before target action with both gate and runner-report evidence references. The report and evidence do not fabricate request/response data. I found no mismatched dependency, script/result/report hash, Case mapping, or false PASS. This review confirms the present upstream BLOCKED result only; it does not satisfy the Case Expected, run B01 Regression, or prove the later GET/read-back. No API request was made during this review."
+  ]
+}

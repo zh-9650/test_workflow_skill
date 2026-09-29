@@ -80,7 +80,7 @@ def _runner_report_state(report, runner, script_ref, path):
         if not assertions: fail(path,'Vitest report has no assertions for the official Case script')
         return 'passed' if all(a.get('status')=='passed' for a in assertions) else 'failed',report.get('startTime')
     if runner=='playwright-test':
-        matches=[s for s in report.get('suites',[]) if str(s.get('file','')).replace('\\','/').endswith(script_ref)]
+        matches=[s for s in report.get('suites',[]) if str(s.get('file','')).replace('\\','/').endswith(script_ref) or Path(script_ref).name == Path(str(s.get('file',''))).name]
         if len(matches)!=1: fail(path,f'Playwright report must contain exactly one suite for {script_ref}')
         tests=[]
         def collect(suite):
@@ -152,7 +152,101 @@ def _assert_secret_keys_redacted(value,path):
         fail(path,'evidence contains a recognizable credential or personal-data value')
 
 
-def _validate_automation_run(plan_case,result,evidence_root,rows_by_id):
+def _blocked_upstream_gate(plan_case,result,evidence_root,rows_by_id,dependency_context):
+    """Validate evidence for an upstream gate that prevented any target action."""
+    if not (
+        result.get('status')=='BLOCKED'
+        and result.get('blocked_reason_type')=='upstream_case'
+        and result.get('target_action_executed') is False
+        and result.get('actual_execution')=='NOT_EXECUTED'
+    ):
+        return False
+    cid=plan_case.get('case_id'); dependencies=plan_case.get('dependencies') or []
+    if not dependencies: fail(f'{cid}.dependencies','upstream gate requires confirmed planned dependencies')
+    if not isinstance(dependency_context,dict): fail(f'{cid}.dependency_context','trusted Runtime Task dependency context is required')
+    unresolved=[]
+    for dep in dependencies:
+        ctx=dependency_context.get(dep)
+        if not isinstance(ctx,dict) or ctx.get('reviewer_confirmed') is not True:
+            fail(f'{cid}.dependency_context.{dep}','trusted Reviewer-confirmed dependency result is required')
+        state=ctx.get('final_result') or ctx.get('status')
+        if ctx.get('case_id') not in (None,dep): fail(f'{cid}.dependency_context.{dep}.case_id','does not match planned dependency')
+        if state not in {'PASS','PASS_AFTER_FIX'}:
+            if state not in {'FAIL','BLOCKED'}: fail(f'{cid}.dependency_context.{dep}.final_result','must be a terminal unresolved result')
+            unresolved.append(dep)
+    if not unresolved: fail(f'{cid}.dependency_context','all planned dependencies are resolved; upstream block is invalid')
+    affected=result.get('affected_by')
+    affected_ids=set(affected if isinstance(affected,list) else str(affected or '').split(','))
+    affected_ids={str(x).strip() for x in affected_ids if str(x).strip()}
+    if affected_ids!=set(unresolved): fail(f'{cid}.affected_by','must exactly identify every unresolved planned dependency')
+
+    gate_ref=None
+    for row in rows_by_id.values():
+        for ref in row.get('evidence_refs',row.get('evidence',[])):
+            path=_evidence_path(ref,evidence_root)
+            if path.suffix.lower()=='.json' and path.name!='vitest-report.json':
+                try: payload=json.loads(path.read_text(encoding='utf-8'))
+                except (OSError,ValueError): continue
+                if isinstance(payload,dict) and payload.get('evidence_type')=='blocked_dependency':
+                    if gate_ref is not None: fail(f'{cid}.blocked_dependency_evidence','exactly one gate evidence file is allowed')
+                    gate_ref=path
+    if gate_ref is None: fail(f'{cid}.blocked_dependency_evidence','current Case must attach blocked_dependency gate evidence')
+    for eid,row in rows_by_id.items():
+        if row.get('result')=='blocked':
+            refs=row.get('evidence_refs',row.get('evidence',[]))
+            if not any(_evidence_path(ref,evidence_root).resolve()==gate_ref.resolve() for ref in refs):
+                fail(f'{cid}.expected_results[{eid}].evidence_refs','blocked Expected must directly attach the dependency gate evidence')
+    try: gate=json.loads(gate_ref.read_text(encoding='utf-8'))
+    except (OSError,ValueError) as exc: fail(f'{cid}.blocked_dependency_evidence',f'invalid JSON: {exc}')
+    if gate.get('case_id')!=cid or gate.get('blocked_reason_type')!='upstream_case': fail(f'{cid}.blocked_dependency_evidence','case and block type must match')
+    if gate.get('target_action_executed') is not False or gate.get('request_made') is not False: fail(f'{cid}.blocked_dependency_evidence','must prove no target action or request was made')
+    def has_request_response_payload(value):
+        if isinstance(value,dict):
+            for key,item in value.items():
+                normalized=re.sub(r'([a-z0-9])([A-Z])',r'\1_\2',str(key)).lower()
+                compact=normalized.replace('_','')
+                if (('request' in compact and compact!='requestmade') or 'response' in compact
+                    or compact in {'url','headers','body','statuscode'}):
+                    return True
+                if has_request_response_payload(item): return True
+        elif isinstance(value,list):
+            return any(has_request_response_payload(item) for item in value)
+        return False
+    if has_request_response_payload(gate): fail(f'{cid}.blocked_dependency_evidence','gate evidence must not contain request/response payload fields')
+    rows=gate.get('dependency_results')
+    if not isinstance(rows,list): fail(f'{cid}.blocked_dependency_evidence.dependency_results','list required')
+    observed={}
+    for item in rows:
+        if not isinstance(item,dict) or not item.get('case_id') or item['case_id'] in observed: fail(f'{cid}.blocked_dependency_evidence.dependency_results','unique dependency case rows required')
+        observed[item['case_id']]=item
+    if set(observed)!=set(unresolved): fail(f'{cid}.blocked_dependency_evidence.dependency_results','must cover exactly all unresolved dependencies')
+    for dep in unresolved:
+        ctx=dependency_context[dep]; item=observed[dep]
+        if item.get('status')!=(ctx.get('final_result') or ctx.get('status')) or item.get('reviewer_confirmed') is not True:
+            fail(f'{cid}.blocked_dependency_evidence.{dep}','does not match trusted Reviewer-confirmed Runtime Task context')
+    if gate.get('affected_by')!=result.get('affected_by'): fail(f'{cid}.blocked_dependency_evidence.affected_by','must match Case result')
+    _assert_secret_keys_redacted(gate,str(gate_ref))
+    all_refs=[]
+    for row in rows_by_id.values():
+        all_refs.extend(row.get('evidence_refs',row.get('evidence',[])))
+    for field in ('evidence_refs','file_evidence_refs'):
+        refs=result.get(field,[]) or []
+        if not isinstance(refs,list): fail(f'{cid}.{field}','must be a list of current-Case evidence refs')
+        all_refs.extend(refs)
+    checked=set()
+    for ref in all_refs:
+        path=_evidence_path(ref,evidence_root)
+        _require_single_evidence(ref,f'{cid}.blocked_dependency_evidence',evidence_root,_allowed_case_root(plan_case,evidence_root))
+        if path.suffix.lower()!='.json' or path.resolve() in checked: continue
+        checked.add(path.resolve())
+        try: payload=json.loads(path.read_text(encoding='utf-8'))
+        except (OSError,ValueError) as exc: fail(f'{cid}.blocked_dependency_evidence',f'JSON evidence must be readable: {exc}')
+        if has_request_response_payload(payload):
+            fail(f'{cid}.blocked_dependency_evidence','Case JSON evidence must not contain request/response payload fields when the target action was not executed')
+    return True
+
+
+def _validate_automation_run(plan_case,result,evidence_root,rows_by_id,dependency_context=None):
     cid=plan_case.get('case_id'); planned=plan_case.get('automation',{}); main=_main(plan_case)
     if main=='人工' or planned.get('required') is False:
         if result.get('automation_run') is not None: fail(f'{cid}.automation_run','manual Case cannot claim an automated run')
@@ -195,6 +289,7 @@ def _validate_automation_run(plan_case,result,evidence_root,rows_by_id):
     if result.get('status')=='FAIL' and report_state!='failed': fail(f'{cid}.status','product FAIL requires a failed official assertion for this Case')
 
     ep=plan_case.get('evidence_plan',{})
+    blocked_gate=_blocked_upstream_gate(plan_case,result,evidence_root,rows_by_id,dependency_context)
     official_report=report_path.resolve()
     for item in ep.get('screenshots',[]):
         for eid in item.get('expected_ids',[]):
@@ -203,6 +298,7 @@ def _validate_automation_run(plan_case,result,evidence_root,rows_by_id):
                 fail(f'{cid}.evidence_plan.screenshots',f'expected a screenshot for Expected {eid}')
     for item in ep.get('api',[]):
         if item.get('kind') not in {'request_response','read_back'}: continue
+        if blocked_gate and item.get('kind')=='request_response': continue
         for eid in item.get('expected_ids',[]):
             refs=rows_by_id[eid].get('evidence_refs',rows_by_id[eid].get('evidence',[]))
             json_refs=[ref for ref in refs if Path(str(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)).suffix.lower()=='.json']
@@ -233,7 +329,66 @@ def _validate_automation_run(plan_case,result,evidence_root,rows_by_id):
         if video_path.suffix.lower() not in {'.webm','.mp4'}: fail(f'{cid}.recording_ref','case recording must be a video file')
 
 
-def validate(plan_case,result,evidence_root=None):
+def _validate_jev_execution(plan_case, result, evidence_root):
+    cid = plan_case.get('case_id')
+    jev = plan_case.get('jev_policy')
+    if not isinstance(jev, dict):
+        return
+    mode = jev.get('mode', 'none')
+    invocations = result.get('jev_invocations')
+    if invocations is None and isinstance(result.get('jev_invocation'), dict):
+        invocations = [result['jev_invocation']]
+
+    if mode == 'none':
+        if invocations:
+            fail(f'{cid}.jev', 'Case jev_policy mode is none but runtime result contains Jev invocation records')
+        return
+
+    if mode == 'required':
+        if not isinstance(invocations, list) or len(invocations) == 0:
+            if result.get('status') == 'PASS':
+                fail(f'{cid}.status', 'PASS forbidden: planned required Jev invocation was not performed')
+            fail(f'{cid}.jev_invocations', 'required Jev invocation records missing in runtime result')
+
+    if mode == 'conditional':
+        if not invocations:
+            skipped_reason = result.get('jev_skipped_reason') or result.get('jev_not_called_reason')
+            if not skipped_reason or not str(skipped_reason).strip():
+                fail(f'{cid}.jev_skipped_reason', 'conditional Jev invocation was not performed; non-empty jev_skipped_reason required')
+            return
+
+    total_cost = 0.0
+    planned_tt = jev.get('target_type')
+    planned_eids = set(jev.get('expected_ids', []))
+    for idx, inv in enumerate(invocations or []):
+        p = f'{cid}.jev_invocations[{idx}]'
+        if not isinstance(inv, dict):
+            fail(p, 'invocation record must be an object')
+        tt = inv.get('target_type')
+        if planned_tt and tt and tt != planned_tt:
+            fail(f'{p}.target_type', f'mismatch with planned target_type {planned_tt}, got {tt}')
+        req_hash = inv.get('request_sha256')
+        res_hash = inv.get('response_sha256')
+        if not isinstance(req_hash, str) or len(req_hash) != 64:
+            fail(f'{p}.request_sha256', 'valid 64-char sha256 hash required')
+        if not isinstance(res_hash, str) or len(res_hash) != 64:
+            fail(f'{p}.response_sha256', 'valid 64-char sha256 hash required')
+        cost = inv.get('cost_usd', inv.get('estimated_cost_usd', 0.0))
+        if type(cost) not in (int, float) or cost < 0:
+            fail(f'{p}.cost_usd', 'non-negative number required')
+        total_cost += float(cost)
+        conf = inv.get('confidence')
+        if type(conf) not in (int, float) or not (0.0 <= conf <= 1.0):
+            fail(f'{p}.confidence', f'confidence must be a number between 0.0 and 1.0, got {conf}')
+        eid = inv.get('expected_id')
+        if planned_eids and eid and eid not in planned_eids:
+            fail(f'{p}.expected_id', f'must map to planned expected_ids {sorted(planned_eids)}, got {eid}')
+    max_cost = jev.get('max_cost_usd')
+    if max_cost is not None and total_cost > max_cost:
+        fail(f'{cid}.jev_invocations', f'total Jev cost ${total_cost:.4f} exceeds planned max_cost_usd ${max_cost:.4f}')
+
+
+def validate(plan_case,result,evidence_root=None,*,dependency_context=None):
     cid=plan_case.get('case_id'); status=result.get('status')
     schema_version=result.get('schema_version')
     if type(schema_version) is not int or schema_version != EXECUTION_SCHEMA_VERSION:
@@ -259,7 +414,8 @@ def validate(plan_case,result,evidence_root=None):
         if not refs: fail(p+'.evidence_refs','every Expected requires current-run evidence')
         _require_evidence(refs,p+'.evidence_refs',evidence_root,case_evidence_root)
 
-    _validate_automation_run(plan_case,result,evidence_root,row_by)
+    _validate_automation_run(plan_case,result,evidence_root,row_by,dependency_context)
+    _validate_jev_execution(plan_case,result,evidence_root)
 
     if status=='PASS':
         bad=[eid for eid,r in row_by.items() if r.get('result')!='pass']

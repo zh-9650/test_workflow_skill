@@ -67,6 +67,14 @@ def _result_status_summary(results):
     else: overall='MIXED'
     return {'overall':overall,'cases':cases}
 
+def _initial_batch_review(state):
+    """Return the first Batch review; later Retest reviews are separate receipts."""
+    initial=[item.get('review') for item in state.get('review_history',[])
+             if item.get('type')=='initial_or_batch_review']
+    if len(initial)!=1 or not isinstance(initial[0],dict):
+        fail('review_history','exactly one initial Batch Reviewer record is required')
+    return initial[0]
+
 def _validate_reviewer_output(run,receipt,reviewer_task,review,reviewer_session,path):
     outputs=receipt.get('outputs',{}) if isinstance(receipt,dict) else {}
     if not isinstance(outputs,dict) or len(outputs)!=1:
@@ -112,15 +120,15 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
     runtime_mod._validate_frozen_artifacts(run,reviewer_task,task,results)
     reviewer=state.get('reviewer') or {}
     review_history=state.get('review_history',[])
-    initial_review=next((item.get('review') for item in review_history if item.get('type')=='initial_or_batch_review'),reviewer)
+    initial_review=_initial_batch_review(state)
     if review_history:
-        last_local_review=next((item.get('review') for item in reversed(review_history) if item.get('type')=='local_retest_review'),None)
+        last_local_review=_latest_accepted_local_retest_review(run,bid,state)
         expected_final_review=(runtime_mod._compose_reviewer_review(initial_review,last_local_review,task['case_order'])
                                if last_local_review else initial_review)
         if reviewer!=expected_final_review:
             fail(f'batch[{bid}].reviewer','final aggregate Reviewer state must reconcile to initial and latest local Retest reviews')
     reviewer_receipt=state.get('reviewer_dispatch_receipt') or {}
-    reviewer_session=_validate_dispatch_receipt(run,reviewer_receipt,'result_reviewer',reviewer_task,reviewer.get('status'),f'batch[{bid}].reviewer_dispatch_receipt')
+    reviewer_session=_validate_dispatch_receipt(run,reviewer_receipt,'result_reviewer',reviewer_task,initial_review.get('status'),f'batch[{bid}].reviewer_dispatch_receipt')
     if worker_session==reviewer_session: fail(f'batch[{bid}].agent_sessions','Worker and Reviewer must be different host sessions')
     if reviewer_session in run_sessions:
         fail(f'batch[{bid}].reviewer_dispatch_receipt.agent_session_id','host Agent session must be unique across the entire Run')
@@ -201,12 +209,39 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
         fail(f'batch[{bid}].retest_history','does not account for every generated Retest Task')
     if history:
         latest=history[-1]; latest_row=dash_batch_rows[bid]
+        latest_retest_results=_run_json(run,latest.get('results_ref',''),f'batch[{bid}].latest_retest.results_ref')[1]
+        if latest_row.get('last_retest_worker_result_status')!=_result_status_summary(latest_retest_results):
+            fail(f'dashboard.batches[{bid}].last_retest_worker_result_status','must match the latest Retest Worker result')
+        if latest_row.get('last_retest_reviewer_result_status')!=(latest.get('review') or {}).get('status'):
+            fail(f'dashboard.batches[{bid}].last_retest_reviewer_result_status','must match the latest Retest Reviewer result')
         if latest_row.get('last_retest_worker_session_id')!=(latest.get('worker_dispatch_receipt') or {}).get('agent_session_id'):
             fail(f'dashboard.batches[{bid}].last_retest_worker_session_id','must match the latest Runtime Retest Worker receipt')
         if latest_row.get('last_retest_reviewer_session_id')!=(latest.get('reviewer_dispatch_receipt') or {}).get('agent_session_id'):
             fail(f'dashboard.batches[{bid}].last_retest_reviewer_session_id','must match the latest Runtime Retest Reviewer receipt')
         if latest_row.get('last_retest_worker_receipt_status')!='completed' or latest_row.get('last_retest_reviewer_receipt_status')!='completed':
             fail(f'dashboard.batches[{bid}].last_retest_receipt_status','latest Retest Worker and Reviewer receipts must be completed')
+    else:
+        latest_row=dash_batch_rows[bid]
+        for field in ('last_retest_worker_session_id','last_retest_worker_receipt_status','last_retest_worker_result_status',
+                      'last_retest_reviewer_session_id','last_retest_reviewer_receipt_status','last_retest_reviewer_result_status'):
+            if latest_row.get(field) is not None:
+                fail(f'dashboard.batches[{bid}].{field}','must be empty when the Batch has no Retest history')
+
+def _latest_accepted_local_retest_review(run,bid,state):
+    """Return the latest local Retest review, excluding independent product Regression reviews."""
+    review_history=state.get('review_history',[])
+    for index,entry in reversed(list(enumerate(state.get('retest_history',[])))):
+        if entry.get('mode')=='product_regression':
+            continue
+        reviewer_task_path,reviewer_task=_run_json(run,entry.get('reviewer_task_ref',''),f'batch[{bid}].retest_history[{index}].reviewer_task_ref')
+        task_hash=reviewer_task.get('task_hash')
+        matches=[item for item in review_history if item.get('type')=='local_retest_review' and item.get('reviewer_task_hash')==task_hash]
+        if len(matches)!=1:
+            fail(f'batch[{bid}].review_history','each local Retest review must bind exactly one non-product Runtime Reviewer Task')
+        if matches[0].get('review')!=entry.get('review'):
+            fail(f'batch[{bid}].review_history','local Retest review history must match its accepted Runtime review')
+        return matches[0].get('review')
+    return None
 
 def _validate_case_result_snapshot(run,plan_case,result,runtime_states,runtime_mod):
     bid=plan_case.get('batch_id'); state=runtime_states.get(bid,{})
@@ -246,6 +281,48 @@ def _validate_ledger_regression(item,cid,regression_result,plan,run,defect_mod):
     if by_case.get(cid)!=regression_result:
         fail(f'{cid}.regression_result','must equal the result bound to this Case in the verified Runtime Regression')
 
+
+def _validate_final_jev_audit(cid, pc, item, summary):
+    jev = pc.get('jev_policy')
+    if not isinstance(jev, dict):
+        return
+    mode = jev.get('mode', 'none')
+    runtime = item.get('runtime_result') or {}
+    invocations = runtime.get('jev_invocations')
+    if invocations is None and isinstance(runtime.get('jev_invocation'), dict):
+        invocations = [runtime['jev_invocation']]
+
+    if mode == 'none':
+        if invocations:
+            fail(f'{cid}.jev_policy', 'jev mode is none but case record contains Jev invocations')
+        return
+
+    if mode == 'required':
+        if not invocations:
+            fail(f'{cid}.jev_policy', 'required Jev invocation missing in final case results')
+
+    if mode == 'conditional' and not invocations:
+        skipped = runtime.get('jev_skipped_reason') or summary.get('jev_skipped_reason') or item.get('jev_skipped_reason')
+        if not skipped:
+            fail(f'{cid}.jev_skipped_reason', 'conditional Jev invocation was skipped but no skip reason was reconciled')
+
+    if invocations:
+        total_cost = 0.0
+        for idx, inv in enumerate(invocations):
+            if not isinstance(inv, dict):
+                fail(f'{cid}.jev_invocations[{idx}]', 'invocation record must be dict')
+            cost = inv.get('cost_usd', inv.get('estimated_cost_usd', 0.0))
+            if type(cost) not in (int, float) or cost < 0:
+                fail(f'{cid}.jev_invocations[{idx}].cost_usd', 'non-negative cost required')
+            total_cost += float(cost)
+            conf = inv.get('confidence')
+            if type(conf) not in (int, float) or not (0.0 <= conf <= 1.0):
+                fail(f'{cid}.jev_invocations[{idx}].confidence', f'confidence must be between 0.0 and 1.0, got {conf}')
+        max_cost = jev.get('max_cost_usd')
+        if max_cost is not None and total_cost > max_cost:
+            fail(f'{cid}.jev_policy.max_cost_usd', f'total Jev cost ${total_cost:.4f} exceeds planned max_cost_usd ${max_cost:.4f}')
+
+
 def derive_assessment(rows,plan_by):
     unresolved=[r for r in rows if r['status']=='FAIL']; blocked=[r for r in rows if r['status']=='BLOCKED']
     core=[r for r in rows if plan_by[r['case_id']].get('core_flow') or plan_by[r['case_id']].get('core_flow_id')]
@@ -254,7 +331,9 @@ def derive_assessment(rows,plan_by):
     if critical or not core_ok: conclusion='not_recommended'
     elif blocked or unresolved: conclusion='ready_with_risk'
     else: conclusion='ready'
-    return {'coverage_complete':True,'core_flow_passed':core_ok,'unresolved_critical_defects':len(critical),'blocked_scope':[r['case_id'] for r in blocked],'regression_complete':True,'conclusion':conclusion}
+    coverage_ok = (len(blocked) == 0)
+    regression_complete = (len(unresolved) == 0)
+    return {'coverage_complete':coverage_ok,'core_flow_passed':core_ok,'unresolved_critical_defects':len(critical),'blocked_scope':[r['case_id'] for r in blocked],'regression_complete':regression_complete,'conclusion':conclusion}
 
 def validate(v,run_dir=None):
     if run_dir is None: run_dir=v.get('run_dir')
@@ -307,7 +386,7 @@ def validate(v,run_dir=None):
     case_mod.validate(confirmed_design,confirmed_inputs['test-points'],confirmed_inputs['business-understanding'],require_confirmed=True)
     confirmed_cases={'cases':case_mod.project_execution_cases(confirmed_design)}
     planning_mod=_load(Path(__file__).resolve().parents[2]/'test-execution-planning/scripts/execution_plan.py','final_execution_plan_contract')
-    planning_mod.validate(plan,require_confirmed=False,confirmed_cases=confirmed_cases,confirmed_cases_sha256=case_binding['contract_sha256'])
+    planning_mod.validate(plan,require_confirmed=False,confirmed_cases=confirmed_cases,confirmed_cases_sha256=case_binding['contract_sha256'],require_context=True)
     plan_by={c['case_id']:c for c in plan.get('cases',[])}; plan_ids=set(plan_by)
     formal=set(v.get('formal_case_ids',[])); planned=set(v.get('planned_case_ids',[])); rows=v.get('results',[]); rid={r.get('case_id') for r in rows}
     if not formal or not planned or not rows: fail('run','formal_case_ids/planned_case_ids/results required')
@@ -331,6 +410,16 @@ def validate(v,run_dir=None):
     if set(supplied_batches)!=set(planned_batches): fail('batch_results','every planned batch requires one final batch result')
     runtime_states={}; run_sessions=set()
     for bid,batch in planned_batches.items():
+        batch_cases=[c for c in plan.get('cases',[]) if c.get('batch_id')==bid]
+        batch_ledger_items=[ledger_rows.get(c['case_id'],{}) for c in batch_cases]
+        is_dr_blocked=bool(batch_ledger_items) and all(item.get('source_kind')=='data_readiness' and (item.get('final_result') or item.get('status'))=='BLOCKED' for item in batch_ledger_items)
+        if is_dr_blocked:
+            for item in batch_ledger_items:
+                if item.get('reviewer_confirmed') is not True:
+                    fail(f'batch_results[{bid}].data_readiness','Data Readiness BLOCKED cases must be reviewer-confirmed')
+                if not item.get('data_readiness_review'):
+                    fail(f'batch_results[{bid}].data_readiness','Data Readiness Review artifact/contract required')
+            continue
         state_path=run/f'internal/execution/runtime-state/{bid}-state.json'
         if not state_path.exists(): fail(f'batch_results[{bid}]',f'missing runtime state {state_path}')
         state=json.loads(state_path.read_text(encoding='utf-8'))
@@ -384,12 +473,19 @@ def validate(v,run_dir=None):
                 _,results=_run_json(run,entry.get('results_ref',''),f'{cid}.resume.results_ref')
                 if any(r.get('case_id')==cid and r==resumed for r in results): matches.append(entry)
             if len(matches)!=1: fail(f'{cid}.resume_history','must match exactly one real resumed Worker/Reviewer result chain')
+        elif item.get('source_kind')=='data_readiness':
+            if status!='BLOCKED': fail(f'{cid}.status','data_readiness source_kind must have status BLOCKED')
+            if item.get('reviewer_confirmed') is not True: fail(f'{cid}.ledger','data_readiness result must be reviewer-confirmed')
+            if not item.get('data_readiness_review'): fail(f'{cid}.data_readiness_review','data_readiness review required')
+            if not (summary.get('blocked_reason') or item.get('blocked_reason') or item.get('data_readiness_review',{}).get('blocked_reason')):
+                fail(f'{cid}.blocked_reason','required for data_readiness BLOCKED case')
         else:
             runtime=item.get('runtime_result')
             if not isinstance(runtime,dict): fail(f'{cid}.runtime_result','full runtime result required in case ledger')
             _validate_case_result_snapshot(run,pc,runtime,runtime_states,runtime_mod)
         if status=='FAIL' and not (item.get('bug_ref') or item.get('existing_bug_ref') or summary.get('bug_ref') or summary.get('existing_bug_ref') or summary.get('no_bug_reason')): fail(f'{cid}.FAIL','bug closure required')
-        if status=='BLOCKED' and not (summary.get('blocked_reason') or item.get('runtime_result',{}).get('blocked_reason')): fail(f'{cid}.blocked_reason','required')
+        if status=='BLOCKED' and not (summary.get('blocked_reason') or item.get('blocked_reason') or item.get('runtime_result',{}).get('blocked_reason')): fail(f'{cid}.blocked_reason','required')
+        _validate_final_jev_audit(cid,pc,item,summary)
 
     dashboard_path=run/'dashboard/dashboard-data.json'
     if not dashboard_path.is_file(): fail('dashboard','dashboard-data.json is required for Final Review reconciliation')
@@ -398,6 +494,11 @@ def validate(v,run_dir=None):
     dash_batches={bid:row.get('status') for bid,row in dash_batch_rows.items()}
     state_batches=run_state.get('batch_status',{})
     for bid in planned_batches:
+        batch_cases=[c for c in plan.get('cases',[]) if c.get('batch_id')==bid]
+        batch_ledger_items=[ledger_rows.get(c['case_id'],{}) for c in batch_cases]
+        is_dr_blocked=bool(batch_ledger_items) and all(item.get('source_kind')=='data_readiness' and (item.get('final_result') or item.get('status'))=='BLOCKED' for item in batch_ledger_items)
+        if is_dr_blocked:
+            continue
         if dash_batches.get(bid)!='completed': fail(f'dashboard.batches[{bid}]','must be completed before Final Review')
         if state_batches.get(bid)!='completed': fail(f'run_status.batch_status[{bid}]','must be completed and consistent with Dashboard before Final Review')
         state=json.loads((run/'internal/execution/runtime-state'/f'{bid}-state.json').read_text(encoding='utf-8'))
@@ -411,8 +512,8 @@ def validate(v,run_dir=None):
         expected_worker_status=_result_status_summary(json.loads((run/state['worker_results_ref']).read_text(encoding='utf-8')))
         if dash_batch_rows[bid].get('worker_result_status')!=expected_worker_status:
             fail(f'dashboard.batches[{bid}].worker_result_status','must match the Worker formal result summary')
-        if dash_batch_rows[bid].get('reviewer_result_status')!=(state.get('reviewer') or {}).get('status'):
-            fail(f'dashboard.batches[{bid}].reviewer_result_status','must match the accepted Reviewer result')
+        if dash_batch_rows[bid].get('reviewer_result_status')!=_initial_batch_review(state).get('status'):
+            fail(f'dashboard.batches[{bid}].reviewer_result_status','must match the initial Batch Reviewer result')
     pending_regressions=[d.get('id') for d in dashboard.get('defects',[]) if d.get('status') in {'pending_regression','regression_running'}]
     if pending_regressions: fail('dashboard.defects','pending Regression prevents Final Review: '+', '.join(str(x) for x in pending_regressions))
     dashboard_cases={c.get('id'):c for c in dashboard.get('cases',[])}
@@ -421,7 +522,7 @@ def validate(v,run_dir=None):
         row=dashboard_cases[cid]; ledger_status=ledger_rows[cid].get('final_result') or ledger_rows[cid].get('status')
         if row.get('status')!=ledger_status: fail(f'dashboard.cases[{cid}].status','must match the reviewer-confirmed Case ledger')
         automation=pc.get('automation') or {}
-        if automation.get('required') is True:
+        if automation.get('required') is True and ledger_rows[cid].get('source_kind')!='data_readiness':
             if row.get('planned_execution')!=pc.get('primary_execution') or row.get('runner')!=automation.get('runner'):
                 fail(f'dashboard.cases[{cid}].runner','must match the confirmed API/UI execution stack')
             use_regression=(ledger_status=='PASS_AFTER_FIX' or ledger_rows[cid].get('source')=='regression_impact_passed')

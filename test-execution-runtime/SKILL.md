@@ -120,6 +120,7 @@ Worker 必须在独立上下文中完成本 Batch 并提交自审。只有 Worke
 - 账号；
 - dependency context；
 - 项目资料路径；
+- 可用的项目操作资产、API 文档、前后端源码和已验证脚本路径；缺少具体路径时，明确交给 Worker 在写脚本前定位并记录依据；
 - 输出目录；
 - 允许/禁止调整范围。
 - 每条自动化 Case 已确认的 `script_target`、固定语言/runner/driver、runner report 路径和结果输出路径。
@@ -188,8 +189,57 @@ Worker 必须在独立上下文中完成本 Batch 并提交自审。只有 Worke
 
 自动化 Case 的第一次正式执行必须先在计划指定的 `script_target` 写入正式脚本，再由官方 runner 执行该脚本。禁止用 AI 临时点击、临时请求或其他未归档交互代替正式脚本运行，也禁止先手工试跑后补写脚本并把手工过程记作自动化结果。
 
+- 写脚本前必须先核对已确认的 Case/Plan/Data Manifest 与当前项目的操作资产、接口文档、相关前后端源码；对目标环境的实际页面、请求或响应再做版本核对。尤其是登录/租户/网关/鉴权前置，不能凭 URL、控件外观、端口或旧脚本猜实现。将所依据的路径、版本或实际观测及其对应的脚本步骤记录在当前 Run 的非敏感脚本依据中；资料缺失或与目标环境冲突时先查明，不得把猜测写成正式脚本。详细方法见 `references/runtime-worker-method.md`。
 - API 自动化固定为 TypeScript + Vitest + Node 原生 `fetch`；UI 自动化固定为 TypeScript + Playwright Test。
+- API 脚本不得给测试服务地址写 fallback/default，也不得从端口猜测目标。Worker 必须从当前 Run 的 `internal/execution/execution-context.yaml` 读取 `api_base_url`，设置 `TEST_API_BASE_URL` 并让脚本/共享 runtime context 使用该值；该 YAML 文档使用 JSON-compatible YAML 对象格式，以供固定 Runner 无歧义解析。Runner 会在发出请求前要求变量与当前 Run 文件中的 URL 规范化后完全一致。缺失或未通过 Data Readiness 的地址时停止；正式 Runner/脚本不得访问 Run 上下文之外的默认端口。
 - 执行前校验 `script_target` 与已确认 Plan 一致，脚本在当前 Run 中存在且归属当前 Case；不得临时改用其他路径或驱动。
+- 正式 Runner 每次只允许加载一个 Case 脚本。运行前必须设置 `TEST_RUN_DIR`、`TEST_BATCH_ID`、`TEST_CASE_ID`、`TEST_SCRIPT_TARGET`、唯一的 `TEST_ATTEMPT_ID`、`TEST_RESULTS_DIR`，以及 `TEST_TASK_ID`、`TEST_TASK_HASH`、`TEST_WORKER_SESSION_ID`。后三项必须从本 Batch 当前冻结 Task 与 Runtime 已接受的真实 Worker 派发回执读取；session 必须是宿主实际派发返回值，严禁自造。普通 Batch 读取顶层 `task_ref` / `worker_dispatch_receipt`；Regression 或 BLOCKED Resume 读取 `active_retest` 中的 `task_ref` / `worker_dispatch_receipt`。公共配置会交叉校验这些变量与活动 Runtime state、持久化回执、Task ID/hash、当前 Case 和脚本路径，再把 Vitest/Playwright 的发现范围收窄到该文件。结果目录使用冻结 Task 中的 Case ID，不从可任意命名的脚本 basename 推导。任一变量缺失、来源不符或路径不符都必须停止；禁止不带范围参数的全库/跨 Run 执行。
+- 正式命令只能使用 Bootstrap 提供的 `npm run test:api` / `npm run test:ui` 入口；禁止直接调用 `vitest` / `playwright test` 或向 npm 命令追加 CLI 参数。Runner wrapper 会拒绝参数注入、创建不重复的 Attempt 输出目录并再加载固定配置。绕过 wrapper 的 CLI 调用不是正式运行证据。
+- 每次真实或调试执行都分配新的 Attempt ID；已有输出目录不得复用或覆盖。结果目录固定为 `runner-results/<BATCH_ID>/<CASE_ID>/<ATTEMPT_ID>`。Run、Batch、Case、Attempt ID 仅允许字母、数字、下划线和连字符，避免 runner glob 将 ID 解释成模式。
+- UI 示例（按当前 Case 和每次新 Attempt 替换占位符；API Case 不运行此命令）：
+
+  ```powershell
+  Set-Location "<PROJECT_ROOT>/work/test-automation"
+  $runDir = (Resolve-Path "../test-runs/<RUN_ID>").Path
+  $env:TEST_RUN_DIR = $runDir
+  $env:TEST_BATCH_ID = "<BATCH_ID>"
+  $env:TEST_CASE_ID = "<CASE_ID>"
+  $env:TEST_SCRIPT_TARGET = "scripts/ui/<BATCH_ID>/<CASE_ID>.spec.ts"
+  $env:TEST_ATTEMPT_ID = "attempt-001"
+  $env:TEST_RESULTS_DIR = Join-Path $runDir "runner-results/<BATCH_ID>/<CASE_ID>/attempt-001"
+  $state = Get-Content -Raw (Join-Path $runDir "internal/execution/runtime-state/<BATCH_ID>-state.json") | ConvertFrom-Json
+  $active = if ($state.active_retest) { $state.active_retest } else { $state }
+  $task = Get-Content -Raw (Join-Path $runDir $active.task_ref) | ConvertFrom-Json
+  $env:TEST_TASK_ID = $task.task_id
+  $env:TEST_TASK_HASH = $task.task_hash
+  $env:TEST_WORKER_SESSION_ID = $active.worker_dispatch_receipt.agent_session_id
+  npm run test:ui
+  ```
+
+- API 示例（同样替换占位符；执行上下文文件必须是 JSON-compatible YAML，并且运行时守卫会逐字规范化比对地址）：
+
+  ```powershell
+  Set-Location "<PROJECT_ROOT>/work/test-automation"
+  $runDir = (Resolve-Path "../test-runs/<RUN_ID>").Path
+  $env:TEST_RUN_DIR = $runDir
+  $env:TEST_BATCH_ID = "<BATCH_ID>"
+  $env:TEST_CASE_ID = "<CASE_ID>"
+  $env:TEST_SCRIPT_TARGET = "scripts/api/<BATCH_ID>/<CASE_ID>.test.ts"
+  $env:TEST_ATTEMPT_ID = "attempt-001"
+  $env:TEST_RESULTS_DIR = Join-Path $runDir "runner-results/<BATCH_ID>/<CASE_ID>/attempt-001"
+  $executionContext = Get-Content -Raw (Join-Path $runDir "internal/execution/execution-context.yaml") | ConvertFrom-Json
+  if (-not $executionContext.environment_ready -or -not $executionContext.api_base_url) { throw "API execution context is not ready" }
+  $env:TEST_API_BASE_URL = $executionContext.api_base_url
+  $state = Get-Content -Raw (Join-Path $runDir "internal/execution/runtime-state/<BATCH_ID>-state.json") | ConvertFrom-Json
+  $active = if ($state.active_retest) { $state.active_retest } else { $state }
+  $task = Get-Content -Raw (Join-Path $runDir $active.task_ref) | ConvertFrom-Json
+  $env:TEST_TASK_ID = $task.task_id
+  $env:TEST_TASK_HASH = $task.task_hash
+  $env:TEST_WORKER_SESSION_ID = $active.worker_dispatch_receipt.agent_session_id
+  npm run test:api
+  ```
+
+  API 正式报告必须恰好对应当前 Case；零个或多个 Case 的结果都不能提交。Worker 应使用对应活动冻结 Task 的 `task_id` / `task_hash` 和已接受回执中的真实 `agent_session_id` 设置三项身份变量；Retest 时从 `active_retest` 的 Task 与回执读取，不得误用主 Batch 值。不得给地址添加 fallback，也不得在 Runner 外手动请求地址探测；Data Readiness 或脚本内正式证据必须验证目标服务。
 - 保存官方 runner 原始退出码、report、report 哈希；运行前及运行后分别计算脚本 SHA-256 并确认一致，再冻结该哈希，确保哈希对应实际执行版本。两次不一致就视为脚本被改动，不能提交该次结果。
 - 缺少脚本、runner report、最终脚本哈希或 Case 映射时，结果不得进入 Worker 自审完成状态。
 
@@ -272,6 +322,8 @@ Observe
 - 验证数据。
 
 技术错误不直接判产品 FAIL。
+
+脚本登录或前置导航失败时，先核对脚本实际发送的请求、租户/账号映射、页面定位与当前应用的源码、接口文档和已验证交互是否一致。仅凭脚本报错、HTTP 500 或登录提示，不能判账号/环境 BLOCKED；若用户或已验证流程在同环境同账号下能登录，应优先诊断脚本差异并修复重跑。确实无法核实等价性时保留诊断证据并标为 NEEDS_REVIEW，不得以 BLOCKED 收尾。
 
 ---
 
@@ -379,6 +431,7 @@ Batch 执行完成先检查：
 - Evidence 是否真实位于当前 Run 的 `evidence/Bxx/TCxxx/` 下，而不是旧 Run 或任意外部文件；
 - FAIL 是否排除脚本/数据问题；
 - BLOCKED 是否合理；
+- 脚本依据是否覆盖实际使用的入口、鉴权/租户、请求结构和关键 UI 定位；登录失败是否先排除了脚本与已验证交互的差异；
 - temp/scratch 是否清理；
 - 正式脚本是否归类；
 - 日志是否泄露敏感信息。
@@ -412,6 +465,7 @@ Reviewer 不重新完整执行系统。
 - PASS 可信度；
 - FAIL 是否误判；
 - BLOCKED 是否成立；
+- 对登录/环境 BLOCKED，是否有独立于失败脚本的同环境验证，且已排除脚本请求、租户、定位或配置差异；
 - Evidence 是否能证明判断；
 - 是否存在假执行。
 

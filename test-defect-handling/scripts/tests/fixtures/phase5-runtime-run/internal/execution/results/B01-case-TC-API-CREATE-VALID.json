@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "case_id": "TC-API-CREATE-VALID",
+  "status": "FAIL",
+  "actual_execution": "API",
+  "reason_type": "product_issue",
+  "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+  "actual": "The official TypeScript/Vitest script sent the planned POST /api/items request. The service returned HTTP 500 with error=valid_item_creation_failed and item_name=Phase5 Item instead of HTTP 201 containing the planned item identity.",
+  "reproduced": true,
+  "evidence_refs": [
+    "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json",
+    "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json"
+  ],
+  "expected_results": [
+    {
+      "id": "A-TC-API-CREATE-VALID",
+      "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+      "actual": "HTTP 500; response body was {\"error\":\"valid_item_creation_failed\",\"item_name\":\"Phase5 Item\"}; the planned status and item identity were not returned.",
+      "result": "fail",
+      "evidence_refs": [
+        "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json",
+        "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json"
+      ]
+    }
+  ],
+  "automation_run": {
+    "script_ref": "scripts/api/B01/TC-API-CREATE-VALID.test.ts",
+    "script_sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+    "runner": "vitest",
+    "driver": "node-native-fetch",
+    "static_check": "passed",
+    "debug_attempts": [
+      {
+        "attempt": 1,
+        "started_at": "2026-09-24T07:20:00.029Z",
+        "finished_at": "2026-09-24T07:20:00.274Z",
+        "exit_code": 1,
+        "script_sha256": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+        "failure_classification": "worker_script_evidence_contract_bug",
+        "diagnosis_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-evidence-contract-diagnosis.json",
+        "script_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-script.test.ts",
+        "api_evidence_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-request-response.json",
+        "runner_report_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-vitest-report.json",
+        "artifact_sha256": {
+          "script": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+          "api_evidence": "003bad89b5c9cdebd9d694e6f9df8e443e3bbe99679b265e459fcab0ea018ca1",
+          "runner_report": "793ae3e66f637746ff32a38698bf02db5412d2c0fd22188e2c6a908b5ce8f3ab"
+        }
+      }
+    ],
+    "official_run": {
+      "run_id": "vitest-B01-TC-API-CREATE-VALID-20260924T072225Z",
+      "started_at": "2026-09-24T07:22:25.032Z",
+      "finished_at": "2026-09-24T07:22:25.284Z",
+      "exit_code": 1,
+      "script_sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+      "report_ref": "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json",
+      "report_sha256": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5"
+    }
+  },
+  "task_id": "B01-0b83603a329c",
+  "task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+  "agent_session_id": "/root/phase5_b01_execution_worker_run2"
+}

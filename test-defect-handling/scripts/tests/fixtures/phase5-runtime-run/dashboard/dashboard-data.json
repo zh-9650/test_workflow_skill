@@ -1,0 +1,334 @@
+{
+  "current_stage": "execution-runtime",
+  "current_batch": "B03",
+  "current_case": null,
+  "current_worker": null,
+  "current_reviewer": null,
+  "current_action": "review_finished",
+  "cases": [
+    {
+      "id": "TC-API-CREATE-VALID",
+      "status": "FAIL",
+      "batch_id": "B01",
+      "planned_execution": "API",
+      "actual_execution": "API",
+      "runner": "vitest",
+      "script_ref": "scripts/api/B01/TC-API-CREATE-VALID.test.ts",
+      "script_status": "verified",
+      "debug_attempt_count": 1,
+      "official_run_id": "vitest-B01-TC-API-CREATE-VALID-20260924T072225Z",
+      "official_run_status": "completed",
+      "script_sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+      "evidence_status": "present",
+      "evidence_count": 4,
+      "recording_required": false,
+      "recording_status": "pending",
+      "core_flow_id": null,
+      "blocked_reason_type": null,
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "official_run_exit_code": 1
+    },
+    {
+      "id": "TC-API-READ-ISOLATED",
+      "status": "PASS",
+      "batch_id": "B02",
+      "planned_execution": "API",
+      "actual_execution": "API",
+      "runner": "vitest",
+      "script_ref": "scripts/api/B02/TC-API-READ-ISOLATED.test.ts",
+      "script_status": "verified",
+      "debug_attempt_count": 0,
+      "official_run_id": "vitest-B02-TC-API-READ-ISOLATED-20260924T072808Z",
+      "official_run_status": "completed",
+      "script_sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+      "evidence_status": "present",
+      "evidence_count": 4,
+      "recording_required": false,
+      "recording_status": "pending",
+      "core_flow_id": null,
+      "blocked_reason_type": null,
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "official_run_exit_code": 0
+    },
+    {
+      "id": "TC-API-CREATE-RECOVER",
+      "status": "BLOCKED",
+      "batch_id": "B03",
+      "planned_execution": "API",
+      "actual_execution": "NOT_EXECUTED",
+      "runner": "vitest",
+      "script_ref": "scripts/api/B03/TC-API-CREATE-RECOVER.test.ts",
+      "script_status": "verified",
+      "debug_attempt_count": 0,
+      "official_run_id": "vitest-B03-TC-API-CREATE-RECOVER-20260924T074535Z",
+      "official_run_status": "completed",
+      "script_sha256": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+      "evidence_status": "present",
+      "evidence_count": 4,
+      "recording_required": false,
+      "recording_status": "pending",
+      "core_flow_id": null,
+      "blocked_reason_type": "upstream_case",
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "official_run_exit_code": 0
+    }
+  ],
+  "batches": [
+    {
+      "id": "B01",
+      "name": "Expose valid-create defect in synthetic fixture",
+      "status": "completed",
+      "done": 1,
+      "total": 1,
+      "worker_session_id": "/root/phase5_b01_execution_worker_run2",
+      "worker_receipt_status": "completed",
+      "worker_result_status": {
+        "overall": "FAIL",
+        "cases": {
+          "TC-API-CREATE-VALID": "FAIL"
+        }
+      },
+      "reviewer_session_id": "/root/phase5_b01_result_reviewer_run2",
+      "reviewer_receipt_status": "completed",
+      "reviewer_result_status": "passed"
+    },
+    {
+      "id": "B02",
+      "name": "Independent API PASS control",
+      "status": "completed",
+      "done": 1,
+      "total": 1,
+      "worker_session_id": "/root/phase5_b02_execution_worker_run2",
+      "worker_receipt_status": "completed",
+      "worker_result_status": {
+        "overall": "PASS",
+        "cases": {
+          "TC-API-READ-ISOLATED": "PASS"
+        }
+      },
+      "reviewer_session_id": "/root/phase5_b02_result_reviewer_run2",
+      "reviewer_receipt_status": "completed",
+      "reviewer_result_status": "passed"
+    },
+    {
+      "id": "B03",
+      "name": "Read same deterministic item created by repaired B01 Regression",
+      "status": "completed",
+      "done": 1,
+      "total": 1,
+      "worker_session_id": "/root/phase5_b03_execution_worker_run2",
+      "worker_receipt_status": "completed",
+      "worker_result_status": {
+        "overall": "BLOCKED",
+        "cases": {
+          "TC-API-CREATE-RECOVER": "BLOCKED"
+        }
+      },
+      "reviewer_session_id": "/root/phase5_b03_result_reviewer_run2",
+      "reviewer_receipt_status": "completed",
+      "reviewer_result_status": "passed"
+    }
+  ],
+  "core_flows": [],
+  "defects": [],
+  "reviewer_status": {
+    "B01": {
+      "status": "passed",
+      "reviewer": "/root/phase5_b01_result_reviewer_run2",
+      "retest_case_ids": []
+    },
+    "B02": {
+      "status": "passed",
+      "reviewer": "/root/phase5_b02_result_reviewer_run2",
+      "retest_case_ids": []
+    },
+    "B03": {
+      "status": "passed",
+      "reviewer": "/root/phase5_b03_result_reviewer_run2",
+      "retest_case_ids": []
+    }
+  },
+  "recordings": {},
+  "recent": [
+    {
+      "type": "review_finished",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:49:29.043515+00:00"
+    },
+    {
+      "type": "review_started",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:49:29.008806+00:00"
+    },
+    {
+      "type": "reviewer_dispatched",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:48:02.926785+00:00"
+    },
+    {
+      "type": "worker_completed",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:47:16.350071+00:00"
+    },
+    {
+      "type": "case_finished",
+      "batch_id": "B03",
+      "case_id": "TC-API-CREATE-RECOVER",
+      "at": "2026-09-24T07:46:44.274133+00:00"
+    },
+    {
+      "type": "case_started",
+      "batch_id": "B03",
+      "case_id": "TC-API-CREATE-RECOVER",
+      "at": "2026-09-24T07:44:23.400279+00:00"
+    },
+    {
+      "type": "worker_dispatched",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:44:23.270299+00:00"
+    },
+    {
+      "type": "batch_started",
+      "batch_id": "B03",
+      "case_id": null,
+      "at": "2026-09-24T07:32:57.978560+00:00"
+    },
+    {
+      "type": "review_finished",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:31:46.941685+00:00"
+    },
+    {
+      "type": "review_started",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:31:46.910766+00:00"
+    },
+    {
+      "type": "reviewer_dispatched",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:30:25.595384+00:00"
+    },
+    {
+      "type": "worker_completed",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:29:53.829742+00:00"
+    },
+    {
+      "type": "case_finished",
+      "batch_id": "B02",
+      "case_id": "TC-API-READ-ISOLATED",
+      "at": "2026-09-24T07:29:22.991820+00:00"
+    },
+    {
+      "type": "case_started",
+      "batch_id": "B02",
+      "case_id": "TC-API-READ-ISOLATED",
+      "at": "2026-09-24T07:27:54.466581+00:00"
+    },
+    {
+      "type": "worker_dispatched",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:26:47.916900+00:00"
+    },
+    {
+      "type": "review_finished",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:25:59.072377+00:00"
+    },
+    {
+      "type": "review_started",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:25:59.043389+00:00"
+    },
+    {
+      "type": "reviewer_dispatched",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:24:30.948476+00:00"
+    },
+    {
+      "type": "worker_completed",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:23:55.077699+00:00"
+    },
+    {
+      "type": "case_finished",
+      "batch_id": "B01",
+      "case_id": "TC-API-CREATE-VALID",
+      "at": "2026-09-24T07:23:21.989157+00:00"
+    },
+    {
+      "type": "case_started",
+      "batch_id": "B01",
+      "case_id": "TC-API-CREATE-VALID",
+      "at": "2026-09-24T07:22:19.518207+00:00"
+    },
+    {
+      "type": "case_started",
+      "batch_id": "B01",
+      "case_id": "TC-API-CREATE-VALID",
+      "at": "2026-09-24T07:19:37.253701+00:00"
+    },
+    {
+      "type": "worker_dispatched",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:18:33.513950+00:00"
+    },
+    {
+      "type": "batch_started",
+      "batch_id": "B02",
+      "case_id": null,
+      "at": "2026-09-24T07:17:57.690430+00:00"
+    },
+    {
+      "type": "batch_started",
+      "batch_id": "B01",
+      "case_id": null,
+      "at": "2026-09-24T07:17:57.552371+00:00"
+    }
+  ],
+  "blocked_reason_stats": {
+    "upstream_case": 1
+  },
+  "metrics": {
+    "total_cases": 3,
+    "completed_cases": 3,
+    "total_batches": 3,
+    "completed_batches": 3,
+    "PASS": 1,
+    "FAIL": 1,
+    "BLOCKED": 1,
+    "NEEDS_REVIEW": 0,
+    "RUNNING": 0,
+    "PENDING": 0,
+    "PASS_AFTER_FIX": 0,
+    "planned_execution": {
+      "UI": 0,
+      "API": 3,
+      "人工": 0
+    },
+    "actual_execution": {
+      "UI": 0,
+      "API": 2,
+      "人工": 0
+    }
+  },
+  "last_updated": "2026-09-24T07:49:29.043545+00:00"
+}

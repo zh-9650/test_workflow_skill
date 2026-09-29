@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "workflow_version": "2.0.0",
+  "task_id": "B02-reviewer-001",
+  "agent_role": "result_reviewer",
+  "batch_id": "B02",
+  "case_order": [
+    "TC-API-READ-ISOLATED"
+  ],
+  "worker_task_id": "B02-1a41d7ec3c93",
+  "worker_task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69",
+  "worker_session_id": "/root/phase5_b02_execution_worker_run2",
+  "results_ref": "internal\\execution\\results\\B02-worker-results.json",
+  "results_sha256": "c817182bbfc3b52c9b24d230e5fa4d6b6dfa63df1485c760f0138afcf5120323",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B02-worker-self-review.json",
+  "worker_self_review_sha256": "656628a22f20af8ca20ef8d8b68d9e6794fe86303f4cc3d3efbe6cc04bf4a9fe",
+  "artifact_sha256": {
+    "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json": "1ec24f1fcfb389c9876f1bb4ab0ed7fceb533104fb3f2a22c2e8ab57cc02af17",
+    "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28",
+    "scripts/api/B02/TC-API-READ-ISOLATED.test.ts": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf"
+  },
+  "artifact_snapshot_manifest": {
+    "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json": {
+      "snapshot_ref": "internal/execution/snapshots/737fb05b658d8abb/001-read-request-response.json",
+      "sha256": "1ec24f1fcfb389c9876f1bb4ab0ed7fceb533104fb3f2a22c2e8ab57cc02af17"
+    },
+    "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json": {
+      "snapshot_ref": "internal/execution/snapshots/737fb05b658d8abb/002-vitest-report.json",
+      "sha256": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28"
+    },
+    "scripts/api/B02/TC-API-READ-ISOLATED.test.ts": {
+      "snapshot_ref": "internal/execution/snapshots/737fb05b658d8abb/003-TC-API-READ-ISOLATED.test.ts",
+      "sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf"
+    }
+  },
+  "created_at": "2026-09-24T07:29:53.812359+00:00",
+  "artifact_snapshot_sha256": "ecbf66192199dee84f93bc3668fb282fe24641e187c1191f7ff8a330ecfc87f0",
+  "task_hash": "e46396e75c8aa4918c71107699443acf9d932da254cd26c0caa0623ea348bbd4"
+}

@@ -10,7 +10,7 @@ from reviewer_contract import validate as validate_reviewer
 from execution_control import validate as validate_case_result
 
 STATES={'pending','waiting_for_worker','running','self_review','waiting_for_reviewer','reviewing','needs_rework','completed','blocked','return_upstream','retest_running','retest_self_review','retest_waiting_for_reviewer','retest_reviewing'}
-HOST_DISPATCH_SOURCES={'codex_subagent_tool','claude_task_tool'}
+HOST_DISPATCH_SOURCES={'codex_subagent_tool','claude_task_tool','antigravity_subagent_tool'}
 
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 
@@ -73,7 +73,8 @@ def _validate_result_set(task,results,path='worker_results',evidence_root=None):
     planned={c['case_id']:c for c in task['cases']}; actual=_index_results(results,path)
     if set(planned)!=set(actual): fail(path,f'result case set must equal task case set; missing={sorted(set(planned)-set(actual))}, extra={sorted(set(actual)-set(planned))}')
     for cid in task['case_order']:
-        validate_case_result(planned[cid],actual[cid],evidence_root=evidence_root)
+        validate_case_result(planned[cid],actual[cid],evidence_root=evidence_root,
+                              dependency_context=task.get('dependency_context',{}))
         _validate_dependencies(planned[cid],actual,task.get('dependency_context',{}))
     return [deepcopy(actual[cid]) for cid in task['case_order']]
 
@@ -233,6 +234,8 @@ def _validate_worker_recovery_history(base,history,task=None,batch_id=None):
 
 def _validate_frozen_artifacts(base,reviewer_task,task,results):
     _validate_artifact_snapshot(base,reviewer_task)
+    if reviewer_task.get('dependency_context',{})!=task.get('dependency_context',{}):
+        fail('reviewer_task.dependency_context','must exactly match the frozen Runtime Worker Task dependency context')
     recovery=reviewer_task.get('worker_recovery_history',[])
     _validate_worker_recovery_history(base,recovery,task,batch_id=reviewer_task.get('batch_id'))
     if recovery and reviewer_task.get('worker_session_id')!=(recovery[-1].get('replacement_worker_receipt') or {}).get('agent_session_id'):
@@ -252,7 +255,8 @@ def validate_result_from_snapshot(base,reviewer_task,plan_case,result):
             try: target.relative_to(root.resolve())
             except ValueError: fail('artifact_snapshot_manifest','source artifact path escapes the temporary validation root')
             target.parent.mkdir(parents=True,exist_ok=True); shutil.copy2(source,target)
-        return validate_case_result(plan_case,result,evidence_root=root)
+        return validate_case_result(plan_case,result,evidence_root=root,
+                                    dependency_context=reviewer_task.get('dependency_context',{}))
 
 def _build_reviewer_task(base,batch_id,task,task_ref,results_ref,self_review_ref,results,self_review,sequence=1):
     root=_Path(base); result_hash=_sha256(root/results_ref); self_review_hash=_sha256(root/self_review_ref)
@@ -265,6 +269,7 @@ def _build_reviewer_task(base,batch_id,task,task_ref,results_ref,self_review_ref
         'case_order':list(task['case_order']),
         'worker_task_id':task['task_id'],
         'worker_task_hash':task['task_hash'],
+        'dependency_context':deepcopy(task.get('dependency_context',{})),
         'worker_session_id':None,
         'results_ref':results_ref,
         'results_sha256':result_hash,
@@ -530,7 +535,8 @@ def finish_case_files(run_dir,batch_id,result_path,retest=False):
     for key,expected in [('agent_session_id',receipt.get('agent_session_id')),('task_id',task.get('task_id')),('task_hash',task.get('task_hash'))]:
         result_key='agent_session_id' if key=='agent_session_id' else key
         if result.get(result_key)!=expected: fail(f'{cid}.{result_key}',f'must bind to dispatched Worker and frozen Task')
-    validate_case_result(planned[cid],result,evidence_root=base)
+    validate_case_result(planned[cid],result,evidence_root=base,
+                         dependency_context=task.get('dependency_context',{}))
     actual={k:deepcopy(v) for k,v in partial.items()}; actual[cid]=deepcopy(result)
     _validate_dependencies(planned[cid],actual,task.get('dependency_context',{}))
     partial[cid]=deepcopy(result); holder['current_case']=None; holder['current_worker']=None; holder['last_completed_case']=cid

@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "workflow_version": "2.0.0",
+  "batch_id": "B01",
+  "goal": "Expose valid-create defect in synthetic fixture",
+  "case_order": [
+    "TC-API-CREATE-VALID"
+  ],
+  "cases": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "title": "Create valid item",
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item"
+        }
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-CREATE-VALID",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "checkpoint": "final"
+        }
+      ],
+      "target_action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "name": "Phase5 Item"
+      },
+      "template_case_id": "TC-API-CREATE-VALID",
+      "execution_instance_id": "I-TC-API-CREATE-VALID",
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ]
+      },
+      "batch_id": "B01",
+      "primary_execution": "API",
+      "supporting_observations": [],
+      "dependencies": [],
+      "data_required": false,
+      "data_requirement_reason": "No prerequisite business record; the script creates a request-local isolated object as the tested operation.",
+      "automation": {
+        "required": true,
+        "language": "typescript",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "script_target": "scripts/api/B01/TC-API-CREATE-VALID.test.ts",
+        "script_strategy": "create_or_update"
+      },
+      "evidence_plan": {
+        "level": "standard",
+        "screenshots": [],
+        "api": [
+          {
+            "kind": "request_response",
+            "expected_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          }
+        ],
+        "network": [],
+        "files": [
+          {
+            "kind": "runner_report",
+            "expected_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ],
+        "recording": false,
+        "read_back_required": false
+      }
+    }
+  ],
+  "project_testing_index_ref": ".test-workflow/PROJECT_TESTING_INDEX.md",
+  "source_refs": {
+    "TC-API-CREATE-VALID": []
+  },
+  "dependency_context": {},
+  "execution_context_ref": "internal/execution/execution-context.yaml",
+  "data_manifest_ref": "internal/data/manifests/B01-data-manifest.json",
+  "evidence_plan": {
+    "TC-API-CREATE-VALID": {
+      "level": "standard",
+      "screenshots": [],
+      "api": [
+        {
+          "kind": "request_response",
+          "expected_ids": [
+            "A-TC-API-CREATE-VALID"
+          ],
+          "redacted": true
+        }
+      ],
+      "network": [],
+      "files": [
+        {
+          "kind": "runner_report",
+          "expected_ids": [
+            "A-TC-API-CREATE-VALID"
+          ]
+        }
+      ],
+      "recording": false,
+      "read_back_required": false
+    }
+  },
+  "allowed_adjustments": [
+    "locator",
+    "wait_strategy",
+    "scroll",
+    "popup",
+    "non_validation_navigation",
+    "browser_recovery",
+    "script_bug",
+    "supporting_query"
+  ],
+  "forbidden_adjustments": [
+    "primary_execution",
+    "expected",
+    "case_goal",
+    "critical_steps",
+    "case_scope",
+    "batch_scope",
+    "test_data_meaning"
+  ],
+  "output_paths": {
+    "results": "internal/execution/results/B01",
+    "evidence": "evidence/B01"
+  },
+  "status": "pending",
+  "task_id": "B01-0b83603a329c",
+  "task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41"
+}

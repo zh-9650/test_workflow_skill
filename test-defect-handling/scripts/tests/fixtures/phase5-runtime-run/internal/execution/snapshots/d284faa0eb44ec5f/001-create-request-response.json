@@ -1,0 +1,23 @@
+{
+  "redacted": true,
+  "request": {
+    "method": "POST",
+    "url": "http://127.0.0.1:4174/api/items",
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "item-phase5-b01",
+      "name": "Phase5 Item"
+    }
+  },
+  "response": {
+    "status": 500,
+    "body": {
+      "error": "valid_item_creation_failed",
+      "item_name": "Phase5 Item"
+    },
+    "durationMs": 11,
+    "correlationId": "phase5-1790234545273"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "redacted": true,
+  "request": {
+    "method": "GET",
+    "url": "http://127.0.0.1:4174/api/items/control-001",
+    "headers": {},
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "id": "control-001",
+      "name": "Independent read control",
+      "state": "ready"
+    },
+    "durationMs": 10,
+    "correlationId": "phase5-1790234889208"
+  },
+  "case_id": "TC-API-READ-ISOLATED",
+  "expected_id": "A-TC-API-READ-ISOLATED"
+}

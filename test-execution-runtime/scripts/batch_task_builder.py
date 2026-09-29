@@ -3,6 +3,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import hashlib
 import json
+import re
 import runpy
 
 
@@ -53,8 +54,9 @@ def _validate_automation(case, batch_id, seen_targets):
     target=auto.get('script_target')
     if not isinstance(target,str) or '\\' in target: fail(f'{cid}.automation.script_target','Run-relative POSIX path required')
     parts=target.split('/'); parsed=PurePosixPath(target)
-    if parsed.is_absolute() or any(x in {'','..','.'} for x in parts) or len(parts)!=4 or parts[:3]!=[ *prefix.split('/'), batch_id ] or not parts[3].startswith(cid) or not parts[3].endswith(suffix):
-        fail(f'{cid}.automation.script_target','must be a safe scripts/<api|ui>/<Batch>/<Case>*.ts path')
+    safe_script_name=re.fullmatch(rf'[A-Za-z0-9][A-Za-z0-9_-]*{re.escape(suffix)}',parts[3]) if len(parts)==4 else None
+    if parsed.is_absolute() or any(x in {'','..','.'} for x in parts) or len(parts)!=4 or parts[:3]!=[ *prefix.split('/'), batch_id ] or not parts[3].startswith(cid) or not safe_script_name:
+        fail(f'{cid}.automation.script_target','must be a glob-safe scripts/<api|ui>/<Batch>/<Case>*.ts path')
     if target in seen_targets: fail(f'{cid}.automation.script_target',f'duplicate with {seen_targets[target]}')
     seen_targets[target]=cid
 

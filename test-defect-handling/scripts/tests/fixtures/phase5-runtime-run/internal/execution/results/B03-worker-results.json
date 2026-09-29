@@ -1,0 +1,54 @@
+[
+  {
+    "schema_version": 2,
+    "case_id": "TC-API-CREATE-RECOVER",
+    "status": "BLOCKED",
+    "actual_execution": "NOT_EXECUTED",
+    "target_action_executed": false,
+    "blocked_reason_type": "upstream_case",
+    "blocked_reason": "B01 TC-API-CREATE-VALID is reviewer-confirmed FAIL; the planned GET must wait for B01 Regression to pass.",
+    "affected_by": [
+      "TC-API-CREATE-VALID"
+    ],
+    "expected": "After reviewer-confirmed B01 Regression PASS, GET returns id=item-phase5-b01 and name=Phase5 Item.",
+    "actual": "No target action was executed. The official Vitest gate assertion confirmed the frozen Runtime Task contains reviewer-confirmed B01 FAIL, and recorded blocked_dependency evidence; no HTTP request was made.",
+    "reason_type": "upstream_dependency",
+    "reproduced": false,
+    "evidence_refs": [
+      "evidence/B03/TC-API-CREATE-RECOVER/gate/blocked-dependency.json",
+      "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json"
+    ],
+    "expected_results": [
+      {
+        "id": "A-TC-API-CREATE-RECOVER",
+        "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching B01 Regression result",
+        "actual": "BLOCKED before target action: dependency TC-API-CREATE-VALID is reviewer-confirmed FAIL. No API request was made.",
+        "result": "blocked",
+        "evidence_refs": [
+          "evidence/B03/TC-API-CREATE-RECOVER/gate/blocked-dependency.json",
+          "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json"
+        ]
+      }
+    ],
+    "automation_run": {
+      "script_ref": "scripts/api/B03/TC-API-CREATE-RECOVER.test.ts",
+      "script_sha256": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+      "runner": "vitest",
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "debug_attempts": [],
+      "official_run": {
+        "run_id": "vitest-B03-TC-API-CREATE-RECOVER-20260924T074535Z",
+        "started_at": "2026-09-24T07:45:35.781Z",
+        "finished_at": "2026-09-24T07:45:36.200Z",
+        "exit_code": 0,
+        "script_sha256": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+        "report_ref": "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json",
+        "report_sha256": "68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78"
+      }
+    },
+    "task_id": "B03-903a8fd8784e",
+    "task_hash": "c4b4a6bc5e70c7b1efeec1cc0ccaf92c676309d1ce08c0454ae44c7833978833",
+    "agent_session_id": "/root/phase5_b03_execution_worker_run2"
+  }
+]

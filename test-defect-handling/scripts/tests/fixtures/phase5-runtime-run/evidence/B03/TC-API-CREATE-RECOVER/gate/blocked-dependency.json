@@ -1,0 +1,17 @@
+{
+  "evidence_type": "blocked_dependency",
+  "case_id": "TC-API-CREATE-RECOVER",
+  "blocked_reason_type": "upstream_case",
+  "affected_by": [
+    "TC-API-CREATE-VALID"
+  ],
+  "target_action_executed": false,
+  "request_made": false,
+  "dependency_results": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "status": "FAIL",
+      "reviewer_confirmed": true
+    }
+  ]
+}

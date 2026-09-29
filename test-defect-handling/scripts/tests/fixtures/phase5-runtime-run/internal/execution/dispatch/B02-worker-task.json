@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "workflow_version": "2.0.0",
+  "batch_id": "B02",
+  "goal": "Independent API PASS control",
+  "case_order": [
+    "TC-API-READ-ISOLATED"
+  ],
+  "cases": [
+    {
+      "case_id": "TC-API-READ-ISOLATED",
+      "title": "Read isolated control item",
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)"
+        }
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-READ-ISOLATED",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "checkpoint": "final"
+        }
+      ],
+      "target_action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "preseeded_control_id": "control-001"
+      },
+      "template_case_id": "TC-API-READ-ISOLATED",
+      "execution_instance_id": "I-TC-API-READ-ISOLATED",
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ]
+      },
+      "batch_id": "B02",
+      "primary_execution": "API",
+      "supporting_observations": [],
+      "dependencies": [],
+      "data_required": false,
+      "data_requirement_reason": "Reads the fixture-preseeded, immutable control-001 record; no pre-execution data preparation and no write operation are required.",
+      "automation": {
+        "required": true,
+        "language": "typescript",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "script_target": "scripts/api/B02/TC-API-READ-ISOLATED.test.ts",
+        "script_strategy": "create_or_update"
+      },
+      "evidence_plan": {
+        "level": "standard",
+        "screenshots": [],
+        "api": [
+          {
+            "kind": "request_response",
+            "expected_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          }
+        ],
+        "network": [],
+        "files": [
+          {
+            "kind": "runner_report",
+            "expected_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ],
+        "recording": false,
+        "read_back_required": false
+      }
+    }
+  ],
+  "project_testing_index_ref": ".test-workflow/PROJECT_TESTING_INDEX.md",
+  "source_refs": {
+    "TC-API-READ-ISOLATED": []
+  },
+  "dependency_context": {},
+  "execution_context_ref": "internal/execution/execution-context.yaml",
+  "data_manifest_ref": "internal/data/manifests/B02-data-manifest.json",
+  "evidence_plan": {
+    "TC-API-READ-ISOLATED": {
+      "level": "standard",
+      "screenshots": [],
+      "api": [
+        {
+          "kind": "request_response",
+          "expected_ids": [
+            "A-TC-API-READ-ISOLATED"
+          ],
+          "redacted": true
+        }
+      ],
+      "network": [],
+      "files": [
+        {
+          "kind": "runner_report",
+          "expected_ids": [
+            "A-TC-API-READ-ISOLATED"
+          ]
+        }
+      ],
+      "recording": false,
+      "read_back_required": false
+    }
+  },
+  "allowed_adjustments": [
+    "locator",
+    "wait_strategy",
+    "scroll",
+    "popup",
+    "non_validation_navigation",
+    "browser_recovery",
+    "script_bug",
+    "supporting_query"
+  ],
+  "forbidden_adjustments": [
+    "primary_execution",
+    "expected",
+    "case_goal",
+    "critical_steps",
+    "case_scope",
+    "batch_scope",
+    "test_data_meaning"
+  ],
+  "output_paths": {
+    "results": "internal/execution/results/B02",
+    "evidence": "evidence/B02"
+  },
+  "status": "pending",
+  "task_id": "B02-1a41d7ec3c93",
+  "task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69"
+}

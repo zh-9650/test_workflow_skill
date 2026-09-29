@@ -11,12 +11,12 @@ LEGAL={
  'business-modeling':{'case-design'},
  'case-design':{'business-modeling','execution-planning'},
  'execution-planning':{'data-readiness','case-design'},
- 'data-readiness':{'execution-runtime'},
+ 'data-readiness':{'execution-runtime','execution-planning'},
  'execution-runtime':{'defect-handling','result-review','data-readiness','execution-planning','case-design'},
  'defect-handling':{'execution-runtime','data-readiness','result-review'},
  'result-review':{'closed'}, 'closed':set(),
 }
-BACKWARD={('case-design','business-modeling'),('execution-planning','case-design'),('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
+BACKWARD={('case-design','business-modeling'),('execution-planning','case-design'),('data-readiness','execution-planning'),('execution-runtime','data-readiness'),('execution-runtime','execution-planning'),('execution-runtime','case-design'),('defect-handling','execution-runtime')}
 ARTIFACT_FLAGS={
  'business-understanding':('business_self_review_passed','business_understanding_confirmed'),
  'test-points':('test_points_self_review_passed','test_points_confirmed'),
@@ -53,7 +53,7 @@ def init(run_dir,run_id):
     for x in ['deliverables','dashboard','internal/state','internal/business','internal/design','internal/execution','internal/data','internal/defects','scripts/data','scripts/ui','scripts/api','scripts/temp','evidence','logs','downloads','scratch']:
         (r/x).mkdir(parents=True,exist_ok=True)
     s={'schema_version':SCHEMA_VERSION,'workflow_version':WORKFLOW_VERSION,'run_id':run_id,'current_stage':'business-modeling','current_batch':None,'current_case':None,'current_worker':None,'current_reviewer':None,
-       'last_event':None,'current_action':{'type':'build_business_understanding'},'next_action':{'type':'build_business_understanding'},
+       'last_event':None,'transition_history':[],'current_action':{'type':'build_business_understanding'},'next_action':{'type':'build_business_understanding'},
        'batch_status':{},'open_defects':[],'blocked_items':[],'pending_user_inputs':[],'artifacts':{},'confirmation_bindings':{},
        'confirmations':{'business_self_review_passed':False,'business_understanding_confirmed':False,'test_points_self_review_passed':False,'test_points_confirmed':False,'test_cases_self_review_passed':False,'test_cases_confirmed':False,'planning_self_review_passed':False,'execution_plan_confirmed':False},
        'current_batch_data_ready':False,'batch_data_status':{},'batch_data_bindings':{},'pending_resume':None,
@@ -365,18 +365,38 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
     s=read(path); source=s.get('current_stage')
     if stage not in LEGAL.get(source,set()): fail('transition',f'illegal {source} -> {stage}')
     normal_batch_loop=_normal_batch_data_transition(s,source,stage,batch)
+    if return_reason is not None:
+        return_reason=return_reason.strip()
+        if not return_reason: fail('return_reason','must be non-empty after trimming')
     if (source,stage) in BACKWARD and not return_reason and not normal_batch_loop: fail('return_reason',f'required for corrective transition {source}->{stage}')
     _check_prereq(s,source,stage,batch)
     previous_next=dict(s.get('next_action') or {})
     next_act={'type':next_type}
     if batch: next_act['batch_id']=batch
     if case: next_act['case_id']=case
-    s.update(current_stage=stage,current_batch=batch,current_case=case,current_worker=None,current_reviewer=None,last_event={'type':'stage_transition','from':source,'to':stage,'at':now()},current_action={'type':next_type},next_action=next_act,updated_at=now())
+    transition_event={'type':'stage_transition','from':source,'to':stage,'at':now(),'next_action':next_act.copy()}
+    if batch: transition_event['batch_id']=batch
+    if case: transition_event['case_id']=case
+    if return_reason: transition_event['return_reason']=return_reason
+    transition_history=s.get('transition_history') if 'transition_history' in s else []
+    if not isinstance(transition_history,list): fail('transition_history','must be a list of transition events')
+    transition_history.append(transition_event)
+    s['transition_history']=transition_history
+    s.update(current_stage=stage,current_batch=batch,current_case=case,current_worker=None,current_reviewer=None,last_event=transition_event.copy(),current_action={'type':next_type},next_action=next_act,updated_at=now())
     if stage=='case-design':
         s['current_design_subphase']='test-case-design' if s.get('confirmations',{}).get('test_points_confirmed') else 'test-point-design'
     elif stage!='case-design':
         s['current_design_subphase']=None
+    s.pop('return_reason',None)
     if return_reason: s['return_reason']=return_reason
+    if source=='data-readiness' and stage=='execution-planning':
+        # A plan revision invalidates every readiness decision made against the
+        # previous plan. Router is the sole owner of this state transition.
+        s['batch_data_bindings']={}
+        s['batch_data_status']={}
+        s['current_batch_data_ready']=False
+        s['pending_resume']=None
+        s['parallel_batch_ids']=[]
     if stage=='data-readiness':
         if batch:
             s.setdefault('batch_data_status',{})[batch]='preparing'
@@ -388,6 +408,158 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
         else: s['pending_resume']=None
     write(path,s); return s
 
+WAITING_TYPES={'waiting_for_worker_slot','waiting_for_reviewer_slot','subagent_unavailable','waiting_for_fix_deployment'}
+
+def record_waiting_state(state_path,waiting_type,reason=None,details=None):
+    if waiting_type not in WAITING_TYPES:
+        fail('waiting_type',f'unsupported waiting type {waiting_type}; must be one of {sorted(WAITING_TYPES)}')
+    s=read(state_path)
+    act={'type':waiting_type}
+    if reason: act['reason']=reason
+    if details: act['details']=details
+    s['next_action']=act
+    s['last_event']={'type':'waiting_state_recorded','waiting_type':waiting_type,'reason':reason,'at':now()}
+    s['updated_at']=now(); write(state_path,s); return s
+
+def create_stage_snapshot(state_path,output_path=None):
+    s=read(state_path); run_dir=_run_dir_from_state(state_path)
+
+    # 1. Gate: Verify all initial planned cases are reviewer-confirmed
+    plan_path=run_dir/'internal/execution/execution-plan.json'
+    if not plan_path.is_file():
+        fail('execution_plan', 'Execution plan is required to create a stage snapshot')
+    plan=read(plan_path)
+    planned_cases=plan.get('cases', [])
+    if not planned_cases:
+        fail('execution_plan.cases', 'No cases declared in execution plan')
+
+    ledger_path=run_dir/'internal/execution/results/case-results-ledger.json'
+    if not ledger_path.is_file():
+        fail('case_results_ledger', 'Case results ledger is required to create a stage snapshot')
+    ledger=read(ledger_path)
+    ledger_cases=ledger.get('cases', {})
+
+    for pc in planned_cases:
+        cid = pc['case_id']
+        if cid not in ledger_cases:
+            fail('stage_snapshot.unreviewed_case', f'Case {cid} is not recorded in ledger')
+        item = ledger_cases[cid]
+        if item.get('reviewer_confirmed') is not True:
+            fail('stage_snapshot.unreviewed_case', f'Case {cid} has not been confirmed by Reviewer')
+        status = item.get('final_result') or item.get('status')
+        if not status or status in {'PENDING', 'RUNNING', 'NOT_EXECUTED'}:
+            fail('stage_snapshot.incomplete_case', f'Case {cid} has non-final status {status}')
+        if item.get('source_kind') == 'data_readiness':
+            if not item.get('data_readiness_review'):
+                fail('stage_snapshot.data_readiness', f'Case {cid} is blocked at data readiness without confirmed data_readiness_review')
+
+    # 2. Gate: Output path must be within deliverables/
+    deliverables_dir = (run_dir / 'deliverables').resolve()
+    deliverables_dir.mkdir(parents=True, exist_ok=True)
+    if output_path:
+        out = Path(output_path).resolve()
+        try:
+            out.relative_to(deliverables_dir)
+        except ValueError:
+            fail('output_path', f'snapshot output must be located inside deliverables directory ({deliverables_dir}), got {out}')
+    else:
+        ts_label = now().replace(':', '-').replace('.', '-')
+        out = deliverables_dir / f'stage-snapshot-{ts_label}.json'
+
+    cases_summary = {cid: c.get('final_result') or c.get('status') for cid, c in ledger_cases.items()}
+    env_info = plan.get('target_environment') or {}
+
+    snapshot = {
+        'schema_version': SCHEMA_VERSION,
+        'workflow_version': WORKFLOW_VERSION,
+        'run_id': s.get('run_id'),
+        'snapshot_at': now(),
+        'stage_at_snapshot': s.get('current_stage'),
+        'environment': env_info,
+        'batch_status': s.get('batch_status', {}),
+        'cases_summary': cases_summary,
+        'open_defects': s.get('open_defects', []),
+        'blocked_items': s.get('blocked_items', []),
+        'is_final_review': False
+    }
+    write(out, snapshot)
+    s.setdefault('stage_snapshots', []).append({'path': str(out.resolve()), 'created_at': now(), 'sha256': sha256(out)})
+    s['last_event'] = {'type': 'stage_snapshot_created', 'path': str(out), 'at': now()}
+    s['updated_at'] = now()
+    write(state_path, s)
+    return snapshot
+
+def record_defect_disposition(state_path,defect_id,disposition,operator,rationale,cases=None,target_version=None):
+    if disposition not in {'postponed','wontfix'}:
+        fail('disposition','must be postponed or wontfix')
+    run_dir=_run_dir_from_state(state_path)
+    root=Path(__file__).resolve().parents[2]
+    defect_mod=_load_module(root/'test-defect-handling/scripts/defect_contract.py','defect_contract_disposition')
+    case_ids=[c.strip() for c in (cases or '').split(',') if c.strip()]
+    if not case_ids:
+        s=read(state_path)
+        for d in s.get('open_defects',[]):
+            ref=d.get('defect_id') if isinstance(d,dict) else d
+            if ref==defect_id:
+                case_ids=d.get('affected_cases',[]) if isinstance(d,dict) else []
+                break
+    if not case_ids:
+        try:
+            _,ledger=defect_mod._load_ledger(run_dir)
+            case_ids=[cid for cid,c in ledger.get('cases',{}).items() if c.get('bug_ref')==defect_id or c.get('defect_id')==defect_id]
+        except Exception: pass
+    if not case_ids:
+        fail('cases','affected_case_ids must be specified or resolved from defect')
+    disp_payload={
+        'defect_id':defect_id,
+        'disposition':disposition,
+        'operator':operator,
+        'rationale':rationale,
+        'affected_case_ids':case_ids,
+        'target_version':target_version
+    }
+    defect_mod.apply_disposition_to_ledger(run_dir,disp_payload)
+    s=read(state_path)
+    s.setdefault('defect_dispositions',[]).append(disp_payload)
+    s['open_defects']=[d for d in s.get('open_defects',[]) if (d.get('defect_id') if isinstance(d,dict) else d)!=defect_id]
+    s['last_event']={'type':'defect_disposition_recorded','defect_id':defect_id,'disposition':disposition,'at':now()}
+    s['updated_at']=now(); write(state_path,s); return s
+
+def record_deployment_verified(state_path,target_env,deployment_version,verification_method,evidence_ref,impact_decision=None):
+    s=read(state_path); run_dir=_run_dir_from_state(state_path)
+    if not isinstance(target_env,str) or not target_env.strip():
+        fail('target_env','non-empty target_env is required')
+    if not isinstance(deployment_version,str) or not deployment_version.strip():
+        fail('deployment_version','non-empty deployment_version is required')
+    if not isinstance(verification_method,str) or not verification_method.strip():
+        fail('verification_method','verification_method is required (e.g. git_commit_sha, http_health_endpoint, container_tag)')
+    ev_path=Path(evidence_ref)
+    if not ev_path.is_absolute(): ev_path=run_dir/ev_path
+    if not ev_path.is_file():
+        fail('evidence_ref',f'deployment verification evidence file missing: {evidence_ref}')
+    ev_hash=sha256(ev_path)
+    event_id=f"deploy-{now().replace(':','-').replace('.','-')}"
+    deploy_event={
+        'event_id':event_id,
+        'target_env':target_env,
+        'deployment_version':deployment_version,
+        'verification_method':verification_method,
+        'evidence_ref':str(ev_path.resolve().relative_to(run_dir.resolve())).replace('\\','/'),
+        'evidence_sha256':ev_hash,
+        'verified_at':now(),
+        'impact_decision':impact_decision or {
+            'old_pass_retest_needed':False,
+            'affected_pass_cases':[],
+            'data_recheck_needed':True,
+            'rationale':'Default evaluation on verified fix deployment'
+        }
+    }
+    s.setdefault('deployment_events',[]).append(deploy_event)
+    s['current_deployment_version']=deployment_version
+    s['last_deployment_event']=deploy_event
+    s['last_event']={'type':'deployment_verified','event_id':event_id,'version':deployment_version,'at':now()}
+    s['updated_at']=now(); write(state_path,s); return deploy_event
+
 def main():
     a=argparse.ArgumentParser(); sp=a.add_subparsers(dest='cmd',required=True)
     p=sp.add_parser('init'); p.add_argument('--run-dir',required=True); p.add_argument('--run-id',required=True)
@@ -398,6 +570,10 @@ def main():
     p=sp.add_parser('register-artifact'); p.add_argument('--state',required=True); p.add_argument('--kind',required=True); p.add_argument('--path',required=True); p.add_argument('--review-path'); p.add_argument('--self-review-status',choices=['passed','failed']); p.add_argument('--contract-input')
     p=sp.add_parser('confirm-artifact'); p.add_argument('--state',required=True); p.add_argument('--kind',required=True); p.add_argument('--path',required=True); p.add_argument('--scope',default='current confirmed scope')
     p=sp.add_parser('set-final-review'); p.add_argument('--state',required=True); p.add_argument('--review-file',required=True)
+    p=sp.add_parser('record-waiting'); p.add_argument('--state',required=True); p.add_argument('--type',required=True,choices=sorted(WAITING_TYPES)); p.add_argument('--reason')
+    p=sp.add_parser('create-snapshot'); p.add_argument('--state',required=True); p.add_argument('--output')
+    p=sp.add_parser('record-disposition'); p.add_argument('--state',required=True); p.add_argument('--defect-id',required=True); p.add_argument('--disposition',required=True,choices=['postponed','wontfix']); p.add_argument('--operator',required=True); p.add_argument('--rationale',required=True); p.add_argument('--cases'); p.add_argument('--target-version')
+    p=sp.add_parser('record-deployment-verified'); p.add_argument('--state',required=True); p.add_argument('--target-env',required=True); p.add_argument('--version',required=True); p.add_argument('--method',default='git_commit_sha'); p.add_argument('--evidence',required=True)
     p=sp.add_parser('show'); p.add_argument('--state',required=True)
     x=a.parse_args()
     if x.cmd=='init': v=init(x.run_dir,x.run_id)
@@ -408,6 +584,10 @@ def main():
     elif x.cmd=='register-artifact': v=register_artifact(x.state,x.kind,x.path,x.self_review_status,x.contract_input,x.review_path)
     elif x.cmd=='confirm-artifact': v=confirm_artifact(x.state,x.kind,x.path,x.scope)
     elif x.cmd=='set-final-review': v=set_final_review_from_file(x.state,x.review_file)
+    elif x.cmd=='record-waiting': v=record_waiting_state(x.state,x.type,x.reason)
+    elif x.cmd=='create-snapshot': v=create_stage_snapshot(x.state,x.output)
+    elif x.cmd=='record-disposition': v=record_defect_disposition(x.state,x.defect_id,x.disposition,x.operator,x.rationale,x.cases,x.target_version)
+    elif x.cmd=='record-deployment-verified': v=record_deployment_verified(x.state,x.target_env,x.version,x.method,x.evidence)
     else: v=read(x.state)
     print(json.dumps(v,ensure_ascii=False,indent=2))
 if __name__=='__main__': main()

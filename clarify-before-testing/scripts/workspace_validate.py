@@ -1,7 +1,7 @@
 from pathlib import Path
 import argparse,json
 BAD_EXT={'.py','.js','.txt','.png','.jpg','.jpeg','.json'}
-ALLOWED_ROOT={'deliverables','dashboard','internal','scripts','evidence','logs','downloads','scratch','.test-secrets.env'}
+ALLOWED_ROOT={'deliverables','dashboard','internal','scripts','evidence','logs','downloads','runner-results','scratch','.test-secrets.env'}
 def validate(run):
     run=Path(run); issues=[]
     for p in run.iterdir():

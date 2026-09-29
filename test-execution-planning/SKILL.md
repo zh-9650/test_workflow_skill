@@ -62,7 +62,7 @@ AI 自审完成
 - API Base URL；
 - 测试环境标识；
 - 至少一个起始账号；
-- 禅道项目/模块/开发负责人映射；
+- 目标缺陷平台项目/模块/负责人映射；
 - 无法由 Agent 产生的外部资源。
 
 用户已经给过的不要重复问。
@@ -381,3 +381,80 @@ internal/execution/execution-plan.json
 Planning Contract 会直接读取真实已确认 Case 文件：不仅 Case ID 集合必须完全一致，`steps / expected_results / target_action / preconditions / test_data` 也不得被 Planning 改写。Planning 只能增加执行方式、Batch、依赖、数据需求和 Evidence 方案等执行层信息。
 
 每个 `expected_results` 还必须携带稳定 `id` 与可观察的 `expected`，因为 Runtime 按 Expected ID 做逐项 Actual/Evidence 对账。
+
+---
+
+# 14. 执行上下文、数据需求分类与 Jev 策略
+
+Execution Plan V2 还必须包含以下机器字段：
+
+### 14.1 目标环境与初测基线版本 (`target_environment`)
+```json
+{
+  "target_environment": {
+    "env_id": "test",
+    "initial_deployment_version": "v1.2.0-rc1",
+    "web_base_url": "http://127.0.0.1:3000",
+    "api_base_url": "http://127.0.0.1:3000/api"
+  }
+}
+```
+- API Case 必须提供有效的 HTTP(S) `api_base_url`。
+- UI Case 必须提供有效的 HTTP(S) `web_base_url`。
+- 修复部署后由 Router 记录版本部署事件，并与该轮回归结果绑定。
+
+### 14.2 缺陷平台映射 (`defect_platform`)
+```json
+{
+  "defect_platform": {
+    "platform_type": "generic",
+    "project_key": "PROJ-TEST",
+    "credential_ref": "env:DEFECT_PLATFORM_TOKEN"
+  }
+}
+```
+- 明确缺陷平台与项目标识。
+- `credential_ref` 只能保存非敏感引用（如环境变量名或安全配置名），严禁直接填写明文密码/密钥。
+
+### 14.3 数据需求分类 (`data_requirements`)
+```json
+[
+  {
+    "scope": "base_resource",
+    "object_type": "user_account",
+    "case_ids": ["TC-001", "TC-002"]
+  },
+  {
+    "scope": "batch_dedicated",
+    "object_type": "test_order",
+    "case_ids": ["TC-001"]
+  },
+  {
+    "scope": "runtime_generated",
+    "object_type": "payment_receipt",
+    "case_ids": ["TC-001"]
+  }
+]
+```
+- 明确数据需求范围：`base_resource`（基础共享资源）、`batch_dedicated`（Batch 专用数据）、`runtime_generated`（运行期生成）。
+- Planning 阶段只声明需求，由 Data Readiness 在执行该 Batch 前实际准备与回读。
+
+### 14.4 有界 Jev 策略 (`jev_policy`)
+```json
+{
+  "jev_policy": {
+    "mode": "conditional",
+    "target_type": "ui_candidate_revalidation",
+    "purpose": "复杂动态表格中重试候选行定位",
+    "trigger_condition": "首选定位器未匹配到唯一元素",
+    "bounded_options": ["row_selector_a", "row_selector_b", "row_selector_c"],
+    "failure_fallback": "mark_step_fail_and_stop",
+    "max_cost_usd": 0.05,
+    "expected_ids": ["E1"]
+  }
+}
+```
+- `target_type`: UI Case 必须为 `ui_candidate_revalidation`，API Case 必须为 `api_semantic_judgment`。
+- 严禁供应商逃逸/回退 (`failure_fallback` 严禁包含切换提供商)。
+- 必须严格限制成本上限 (`max_cost_usd`) 和绑定 Expected IDs。
+- 实网 Jev 调用前必须经过用户显式授权。

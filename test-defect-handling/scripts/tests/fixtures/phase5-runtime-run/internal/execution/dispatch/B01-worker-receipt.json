@@ -1,0 +1,22 @@
+{
+  "agent_role": "execution_worker",
+  "task_id": "B01-0b83603a329c",
+  "task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+  "agent_session_id": "/root/phase5_b01_execution_worker_run2",
+  "dispatch_source": "codex_subagent_tool",
+  "host_dispatch_ref": "/root/phase5_b01_execution_worker_run2",
+  "started_at": "2026-09-24T07:18:20Z",
+  "accepted_at": "2026-09-24T07:18:33.494289+00:00",
+  "receipt_status": "completed",
+  "finished_at": "2026-09-24T07:23:55.003891+00:00",
+  "result_status": {
+    "overall": "FAIL",
+    "cases": {
+      "TC-API-CREATE-VALID": "FAIL"
+    }
+  },
+  "outputs": {
+    "internal\\execution\\results\\B01-worker-results.json": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+    "internal\\execution\\dispatch\\B01-worker-self-review.json": "1bb008a53b4b7155aa43050f77715b78890a0293976f5cddcbaacf3b8287eb25"
+  }
+}

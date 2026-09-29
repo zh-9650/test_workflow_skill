@@ -153,24 +153,20 @@ initial FAIL
 - 核心业务流程；
 - 未修复 Bug；
 - Bug 严重程度；
-- BLOCKED 范围；
-- 回归；
+- 用户处置（`postponed`/`wontfix`）：保留风险，结论可为“测试基本完成，但仍有风险”（`ready_with_risk`）；
+- BLOCKED 范围：有合法 BLOCKED 时 `coverage_complete` 为 `false`，绝不能为了提高通过率把受阻范围计入通过；
+- 回归是否完整（无待回归项）；
 - 实际完成范围。
 
 例如 98% 通过，但唯一失败是 P0 主流程，不能得出“质量良好”。
 
 ---
 
-# 10. 对外结论使用正常中文
+# 10. 阶段快照 vs 最终报告
 
-只使用类似：
+- **阶段快照**：首轮各 Batch 均得到经复核的执行或受阻结论后生成。记录初测状态与缺陷清单，**不设置 final_review_status=passed，不关闭 Run**；
+- **最终报告**：仅在所有缺陷已回归验证（或已由用户明确延期/无需修复）、所有受阻 Case 恢复执行完毕、无任何待处理 Retest/Regression 时生成。对账整条链路后，Router 绑定真实 Final Review 文件并正式关闭 Run。
 
-- 测试完成，可进入下一阶段；
-- 测试基本完成，但仍有风险；
-- 不建议进入下一阶段；
-- 测试未完成，当前无法形成完整质量结论。
-
-不要输出 COMPLIANT、QUALITY GATE、CONDITIONAL READY。
 
 ---
 

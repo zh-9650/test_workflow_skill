@@ -1,0 +1,279 @@
+{
+  "schema_version": 3,
+  "workflow_version": "2.0.0",
+  "run_id": "PHASE5-RUN-002",
+  "current_stage": "defect-handling",
+  "current_batch": "B01",
+  "current_case": "TC-API-CREATE-VALID",
+  "current_worker": null,
+  "current_reviewer": null,
+  "last_event": {
+    "type": "stage_transition",
+    "from": "execution-runtime",
+    "to": "defect-handling",
+    "at": "2026-09-24T07:51:07.854198+00:00"
+  },
+  "current_action": {
+    "type": "handle_defects"
+  },
+  "next_action": {
+    "type": "handle_defects",
+    "batch_id": "B01",
+    "case_id": "TC-API-CREATE-VALID"
+  },
+  "batch_status": {
+    "B01": "completed",
+    "B02": "completed",
+    "B03": "completed"
+  },
+  "open_defects": [],
+  "blocked_items": [
+    {
+      "case_id": "TC-API-CREATE-RECOVER",
+      "reason": "B01 TC-API-CREATE-VALID is reviewer-confirmed FAIL; the planned GET must wait for B01 Regression to pass."
+    }
+  ],
+  "pending_user_inputs": [],
+  "artifacts": {
+    "business-understanding": {
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\business\\business-model.json",
+      "sha256": "0bb058a4b8da54f82737dff1afb59ef766bf69842233d49c3a072fdfa13b44e4",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\business\\business-model.json",
+      "contract_sha256": "0bb058a4b8da54f82737dff1afb59ef766bf69842233d49c3a072fdfa13b44e4",
+      "registered_at": "2026-09-24T07:17:43.713922+00:00",
+      "self_review_status": "passed",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\business-review.md",
+      "review_sha256": "d1290e1400374b241dd5e411332db311f373905394c3f7af97f3c794314fb4cf",
+      "contract_validation": {
+        "ok": true,
+        "model_version": "BM-PHASE5-SYN-01",
+        "modules": 1,
+        "objects": 1,
+        "state_machines": 0,
+        "relationships": 0,
+        "events": 3,
+        "invariants": 1,
+        "flows": 0,
+        "unknowns": 0,
+        "pending_blocking_questions": [],
+        "blocked_scopes": [],
+        "ready_for_confirmation": true
+      },
+      "ready_for_confirmation": true
+    },
+    "test-points": {
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-points.json",
+      "sha256": "078f6e4229412b949e14e81c1d9ae6a6d2a1fea841b0414fc09d26671086f92f",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-points.json",
+      "contract_sha256": "078f6e4229412b949e14e81c1d9ae6a6d2a1fea841b0414fc09d26671086f92f",
+      "registered_at": "2026-09-24T07:17:44.057931+00:00",
+      "self_review_status": "passed",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\test-point-review.md",
+      "review_sha256": "b8e71cf613c3b9775c20d34464365a1f94ca87ca385c32f6d79912b19df60dc8",
+      "contract_validation": {
+        "ok": true,
+        "design_version": "TP-PHASE5-SYN-01",
+        "business_model_version": "BM-PHASE5-SYN-01",
+        "coverage_obligations": 7,
+        "test_points": 3,
+        "coverage_types": [
+          "event_behavior",
+          "failure_atomicity",
+          "field_rule",
+          "invariant"
+        ],
+        "pending_questions": [],
+        "pending_coverage": [],
+        "return_to_business_understanding": false,
+        "ready_for_confirmation": true
+      },
+      "ready_for_confirmation": true
+    },
+    "test-cases": {
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-cases.json",
+      "sha256": "36925a85dafed610b94446a9ee7afe9f42653042ab0784ab1f2fa98a2a4456f6",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-cases.json",
+      "contract_sha256": "36925a85dafed610b94446a9ee7afe9f42653042ab0784ab1f2fa98a2a4456f6",
+      "registered_at": "2026-09-24T07:17:44.257053+00:00",
+      "self_review_status": "passed",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\case-review.md",
+      "review_sha256": "9d2835b49eea8f0d83e7b9b0cb2fd1992dab8f58d44725e8418d52134192fe6d",
+      "contract_validation": {
+        "ok": true,
+        "case_design_version": "CD-PHASE5-SYN-01",
+        "business_model_version": "BM-PHASE5-SYN-01",
+        "test_point_version": "TP-PHASE5-SYN-01",
+        "test_points": 3,
+        "case_templates": 3,
+        "execution_instances": 3,
+        "multi_tp_templates": 0,
+        "parameterized_templates": 0,
+        "tp_instance_coverage": "3/3",
+        "pending_blocking_questions": [],
+        "pending_nonblocking_questions": [],
+        "return_to_business_understanding": false,
+        "return_to_test_point_design": false,
+        "ready_for_confirmation": true
+      },
+      "ready_for_confirmation": true
+    },
+    "execution-plan": {
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "contract_sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "registered_at": "2026-09-24T07:17:44.556338+00:00",
+      "self_review_status": "passed",
+      "contract_validation": {
+        "ok": true,
+        "cases": 3,
+        "batches": 3,
+        "confirmed_cases_bound": true
+      },
+      "ready_for_confirmation": true
+    }
+  },
+  "confirmation_bindings": {
+    "business-understanding": {
+      "sha256": "0bb058a4b8da54f82737dff1afb59ef766bf69842233d49c3a072fdfa13b44e4",
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\business\\business-model.json",
+      "contract_sha256": "0bb058a4b8da54f82737dff1afb59ef766bf69842233d49c3a072fdfa13b44e4",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\business\\business-model.json",
+      "confirmed_scope": "Synthetic Phase 5 fixture only; user authorized the confirmed three-Batch execution design",
+      "confirmed_at": "2026-09-24T07:17:43.827531+00:00",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\business-review.md",
+      "review_sha256": "d1290e1400374b241dd5e411332db311f373905394c3f7af97f3c794314fb4cf"
+    },
+    "test-points": {
+      "sha256": "078f6e4229412b949e14e81c1d9ae6a6d2a1fea841b0414fc09d26671086f92f",
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-points.json",
+      "contract_sha256": "078f6e4229412b949e14e81c1d9ae6a6d2a1fea841b0414fc09d26671086f92f",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-points.json",
+      "confirmed_scope": "Synthetic Phase 5 fixture only; scoped to validating cross-stage orchestration",
+      "confirmed_at": "2026-09-24T07:17:44.162885+00:00",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\test-point-review.md",
+      "review_sha256": "b8e71cf613c3b9775c20d34464365a1f94ca87ca385c32f6d79912b19df60dc8"
+    },
+    "test-cases": {
+      "sha256": "36925a85dafed610b94446a9ee7afe9f42653042ab0784ab1f2fa98a2a4456f6",
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-cases.json",
+      "contract_sha256": "36925a85dafed610b94446a9ee7afe9f42653042ab0784ab1f2fa98a2a4456f6",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\design\\test-cases.json",
+      "confirmed_scope": "Synthetic Phase 5 three-Batch API fixture cases confirmed by user",
+      "confirmed_at": "2026-09-24T07:17:44.355112+00:00",
+      "review_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\deliverables\\case-review.md",
+      "review_sha256": "9d2835b49eea8f0d83e7b9b0cb2fd1992dab8f58d44725e8418d52134192fe6d"
+    },
+    "execution-plan": {
+      "sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "contract_sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "contract_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "confirmed_scope": "User confirmed: proceed with the three synthetic Phase 5 batches; no real project or external service",
+      "confirmed_at": "2026-09-24T07:17:44.663009+00:00"
+    }
+  },
+  "confirmations": {
+    "business_self_review_passed": true,
+    "business_understanding_confirmed": true,
+    "test_points_self_review_passed": true,
+    "test_points_confirmed": true,
+    "test_cases_self_review_passed": true,
+    "test_cases_confirmed": true,
+    "planning_self_review_passed": true,
+    "execution_plan_confirmed": true
+  },
+  "current_batch_data_ready": true,
+  "batch_data_status": {
+    "B01": "consumed",
+    "B02": "consumed",
+    "B03": "consumed"
+  },
+  "batch_data_bindings": {
+    "B01": {
+      "batch_id": "B01",
+      "manifest_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\data\\manifests\\B01-data-manifest.json",
+      "manifest_sha256": "f38e35641024713cdb0d84085adf715d8d3cecf5df3c2cf876969866c14ed845",
+      "plan_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "plan_sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "validated_at": "2026-09-24T07:17:44.867046+00:00",
+      "validation": {
+        "ok": true,
+        "batch_id": "B01",
+        "objects": 0,
+        "readiness": {
+          "ready": true,
+          "checked_at": "2026-09-24T07:17:44.866855+00:00",
+          "reason": "contract validated against current Batch plan and all required data is ready"
+        }
+      }
+    },
+    "B02": {
+      "batch_id": "B02",
+      "manifest_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\data\\manifests\\B02-data-manifest.json",
+      "manifest_sha256": "eda7ec2a9790593f680f09b78c2a150fd24b07f9486f8cff4c376b40a0142fa6",
+      "plan_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "plan_sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "validated_at": "2026-09-24T07:17:44.980222+00:00",
+      "validation": {
+        "ok": true,
+        "batch_id": "B02",
+        "objects": 0,
+        "readiness": {
+          "ready": true,
+          "checked_at": "2026-09-24T07:17:44.980021+00:00",
+          "reason": "contract validated against current Batch plan and all required data is ready"
+        }
+      }
+    },
+    "B03": {
+      "batch_id": "B03",
+      "manifest_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\data\\manifests\\B03-data-manifest.json",
+      "manifest_sha256": "982e0628105c290d72a6c3ddb7a52090b96670e8bb2237752a1a838b45d8ceb8",
+      "plan_path": "C:\\Users\\17381\\Desktop\\测试全流程skill\\.phase5-forward\\synthetic-project\\work\\test-runs\\PHASE5-RUN-002\\internal\\execution\\execution-plan.json",
+      "plan_sha256": "b025c56bb00ef4a5dadcee61d07f2599796da15ee0d3d913bdb8a9fdfab9e5c7",
+      "validated_at": "2026-09-24T07:32:57.738257+00:00",
+      "validation": {
+        "ok": true,
+        "batch_id": "B03",
+        "objects": 0,
+        "readiness": {
+          "ready": true,
+          "checked_at": "2026-09-24T07:32:57.738053+00:00",
+          "reason": "contract validated against current Batch plan and all required data is ready"
+        }
+      }
+    }
+  },
+  "pending_resume": null,
+  "final_review_status": null,
+  "final_review_source": null,
+  "current_design_subphase": null,
+  "updated_at": "2026-09-24T07:51:07.854209+00:00",
+  "parallel_batch_ids": [],
+  "batch_order": [
+    "B01",
+    "B02",
+    "B03"
+  ],
+  "batch_dependencies": {
+    "B01": [],
+    "B02": [],
+    "B03": [
+      "B01"
+    ]
+  },
+  "batch_dependency_cases": {
+    "B01": [],
+    "B02": [],
+    "B03": [
+      "TC-API-CREATE-VALID"
+    ]
+  },
+  "case_status": {
+    "TC-API-CREATE-VALID": "FAIL",
+    "TC-API-READ-ISOLATED": "PASS",
+    "TC-API-CREATE-RECOVER": "BLOCKED"
+  },
+  "pending_resume_batches": []
+}

@@ -1,0 +1,48 @@
+[
+  {
+    "schema_version": 2,
+    "case_id": "TC-API-READ-ISOLATED",
+    "status": "PASS",
+    "actual_execution": "API",
+    "reason_type": "none",
+    "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+    "actual": "The official TypeScript/Vitest script issued only GET /api/items/control-001. The service returned HTTP 200 with id=control-001, name=Independent read control, and state=ready, matching the pre-seeded control. The request used the planned read-only GET endpoint; no write request was sent.",
+    "reproduced": true,
+    "evidence_refs": [
+      "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json",
+      "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json"
+    ],
+    "expected_results": [
+      {
+        "id": "A-TC-API-READ-ISOLATED",
+        "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+        "actual": "HTTP 200 returned id=control-001, name=Independent read control, state=ready. The recorded request is GET /api/items/control-001, so the planned read action made no catalog write.",
+        "result": "pass",
+        "evidence_refs": [
+          "evidence/B02/TC-API-READ-ISOLATED/api/read-request-response.json",
+          "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json"
+        ]
+      }
+    ],
+    "automation_run": {
+      "script_ref": "scripts/api/B02/TC-API-READ-ISOLATED.test.ts",
+      "script_sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+      "runner": "vitest",
+      "driver": "node-native-fetch",
+      "static_check": "passed",
+      "debug_attempts": [],
+      "official_run": {
+        "run_id": "vitest-B02-TC-API-READ-ISOLATED-20260924T072808Z",
+        "started_at": "2026-09-24T07:28:08.976Z",
+        "finished_at": "2026-09-24T07:28:09.217Z",
+        "exit_code": 0,
+        "script_sha256": "a449a3d32f72ae35cf4c6a8adf2e733bc73db5d05265868c2a01c8385f55cfaf",
+        "report_ref": "evidence/B02/TC-API-READ-ISOLATED/runner/vitest-report.json",
+        "report_sha256": "7b85855caf80601d422f49f377e3a75f719c263a641373d167a70a3b2c5c3b28"
+      }
+    },
+    "task_id": "B02-1a41d7ec3c93",
+    "task_hash": "1d7c6f1fc469d6f120575cf4e3b0622383a6bc56c9f209bd58dbbe72a3248e69",
+    "agent_session_id": "/root/phase5_b02_execution_worker_run2"
+  }
+]

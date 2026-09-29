@@ -1,0 +1,220 @@
+{
+  "batch_id": "B01",
+  "status": "completed",
+  "precheck": {
+    "status": "ready",
+    "reason": "precheck passed"
+  },
+  "task_ref": "internal\\execution\\tasks\\B01-task.json",
+  "worker_results_ref": "internal\\execution\\results\\B01-worker-results.json",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B01-worker-self-review.json",
+  "worker_self_review": {
+    "status": "passed",
+    "task_id": "B01-0b83603a329c",
+    "input_task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+    "agent_session_id": "/root/phase5_b01_execution_worker_run2",
+    "results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+    "checked_case_ids": [
+      "TC-API-CREATE-VALID"
+    ],
+    "checks": {
+      "all_cases_checked": true,
+      "all_expected_checked": true,
+      "execution_method_checked": true,
+      "evidence_binding_checked": true,
+      "failure_classification_checked": true,
+      "file_cleanup_checked": true
+    },
+    "findings": [
+      "The only Case in this frozen B01 Task was executed by its planned TypeScript/Vitest script through framework/api-client.ts, which uses Node native fetch. Static typecheck passed before the official run. The final script hash remained a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc and is bound to the result and report.",
+      "The official final Vitest run records one failed assertion: expected HTTP 201, observed HTTP 500. The current-run redacted request/response Evidence independently records the exact planned request and the same 500 response; its top-level redacted=true satisfies the Evidence Contract. The exact official JSON report is attached to the Expected and is within the official run window. Therefore the final Case result is product FAIL, not a runner exit-code inference.",
+      "The first formal attempt also observed HTTP 500, but could not be accepted because the Worker script wrapped the framework Evidence and violated the top-level redacted Contract. That attempt is classified as worker_script_evidence_contract_bug, is not the committed Case result, and its exact script, API evidence, runner report, timestamps, exit code, and hashes are preserved in the Case debug directory. The script was corrected and the final official run used the new stable hash.",
+      "The result binds the actual dispatched worker session /root/phase5_b01_execution_worker_run2, frozen Task id/hash, Case, Expected, final script hash, API evidence, official report, and actual runner timestamps/exit code. The Run scratch directory was empty; the retained debug files are intentional immutable diagnostic evidence, not temporary debris. No Reviewer was dispatched or authored by this Worker."
+    ],
+    "artifact_sha256": {
+      "script": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+      "api_evidence": "55a3523d4ae6ceccf9014832f1e523ee04a76704d583f3d13e2387926c26c6f1",
+      "vitest_report": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5",
+      "worker_results": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76"
+    }
+  },
+  "worker_dispatch_receipt": {
+    "agent_role": "execution_worker",
+    "task_id": "B01-0b83603a329c",
+    "task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+    "agent_session_id": "/root/phase5_b01_execution_worker_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b01_execution_worker_run2",
+    "started_at": "2026-09-24T07:18:20Z",
+    "accepted_at": "2026-09-24T07:18:33.494289+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:23:55.003891+00:00",
+    "result_status": {
+      "overall": "FAIL",
+      "cases": {
+        "TC-API-CREATE-VALID": "FAIL"
+      }
+    },
+    "outputs": {
+      "internal\\execution\\results\\B01-worker-results.json": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+      "internal\\execution\\dispatch\\B01-worker-self-review.json": "1bb008a53b4b7155aa43050f77715b78890a0293976f5cddcbaacf3b8287eb25"
+    }
+  },
+  "reviewer_task_ref": "internal\\execution\\dispatch\\B01-reviewer-task.json",
+  "reviewer_dispatch_receipt": {
+    "agent_role": "result_reviewer",
+    "task_id": "B01-reviewer-001",
+    "task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29",
+    "agent_session_id": "/root/phase5_b01_result_reviewer_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b01_result_reviewer_run2",
+    "started_at": "2026-09-24T07:24:17Z",
+    "accepted_at": "2026-09-24T07:24:30.925676+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:25:59.039218+00:00",
+    "result_status": "passed",
+    "outputs": {
+      "internal/execution/reviews/B01-reviewer-result.json": "07e01e23aee0b1a233715c8316c255157284e9d19abb8762b5de9172d48766c8"
+    }
+  },
+  "reviewer": {
+    "schema_version": 2,
+    "reviewer_task_id": "B01-reviewer-001",
+    "input_task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29",
+    "input_results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+    "agent_session_id": "/root/phase5_b01_result_reviewer_run2",
+    "status": "passed",
+    "checked_case_ids": [
+      "TC-API-CREATE-VALID"
+    ],
+    "checks": {
+      "completeness_checked": true,
+      "method_consistency_checked": true,
+      "judgement_checked": true,
+      "evidence_checked": true,
+      "abnormal_classification_checked": true
+    },
+    "findings": [
+      "The formal Result correctly excludes attempt 01. Its separate diagnostic records worker_script_evidence_contract_bug, its malformed wrapper evidence and distinct script/report/evidence hashes are preserved under evidence/B01/TC-API-CREATE-VALID/debug/, and none of those debug files are listed as official Case evidence. The repaired official script is a separate artifact with the new frozen SHA-256.",
+      "Independently recomputed SHA-256 values for the frozen script, official request/response evidence, official Vitest report, Worker results and Worker self-review all match the Reviewer Task and frozen bindings. The formal TypeScript script sends exactly the planned POST /api/items body using the project API helper (Node native fetch), writes the framework response.evidence directly so redacted=true is top-level, then asserts both HTTP 201 and the expected id/name. A fresh npm run typecheck completed successfully with exit code 0.",
+      "The formal report is the actual Vitest JSON report for the exact formal script path and contains one failed assertion, expected 201 versus observed 500. Its runner start/end epoch values fall within the Worker-reported official execution window. The separately frozen API evidence records the exact planned URL/method/body and matching HTTP 500 response, with redacted=true. The error payload valid_item_creation_failed for Phase5 Item matches the synthetic fixture's explicit injected product-failure branch; it is not a transport, test-data, or assertion-script failure. The expected status and returned identity are absent, so the Case is a supported product FAIL.",
+      "The result and self-review bind the frozen Worker Task hash, dispatched Worker session, Case/Expected, official script, API evidence and runner report. The first attempt's contract rejection was diagnosed and repaired before the formal result was committed; it does not invalidate or replace the formal run. No script, result, or Worker artifact was modified during this independent review."
+    ],
+    "retest_case_ids": [],
+    "return_stage": null
+  },
+  "review_history": [
+    {
+      "type": "initial_or_batch_review",
+      "review": {
+        "schema_version": 2,
+        "reviewer_task_id": "B01-reviewer-001",
+        "input_task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29",
+        "input_results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+        "agent_session_id": "/root/phase5_b01_result_reviewer_run2",
+        "status": "passed",
+        "checked_case_ids": [
+          "TC-API-CREATE-VALID"
+        ],
+        "checks": {
+          "completeness_checked": true,
+          "method_consistency_checked": true,
+          "judgement_checked": true,
+          "evidence_checked": true,
+          "abnormal_classification_checked": true
+        },
+        "findings": [
+          "The formal Result correctly excludes attempt 01. Its separate diagnostic records worker_script_evidence_contract_bug, its malformed wrapper evidence and distinct script/report/evidence hashes are preserved under evidence/B01/TC-API-CREATE-VALID/debug/, and none of those debug files are listed as official Case evidence. The repaired official script is a separate artifact with the new frozen SHA-256.",
+          "Independently recomputed SHA-256 values for the frozen script, official request/response evidence, official Vitest report, Worker results and Worker self-review all match the Reviewer Task and frozen bindings. The formal TypeScript script sends exactly the planned POST /api/items body using the project API helper (Node native fetch), writes the framework response.evidence directly so redacted=true is top-level, then asserts both HTTP 201 and the expected id/name. A fresh npm run typecheck completed successfully with exit code 0.",
+          "The formal report is the actual Vitest JSON report for the exact formal script path and contains one failed assertion, expected 201 versus observed 500. Its runner start/end epoch values fall within the Worker-reported official execution window. The separately frozen API evidence records the exact planned URL/method/body and matching HTTP 500 response, with redacted=true. The error payload valid_item_creation_failed for Phase5 Item matches the synthetic fixture's explicit injected product-failure branch; it is not a transport, test-data, or assertion-script failure. The expected status and returned identity are absent, so the Case is a supported product FAIL.",
+          "The result and self-review bind the frozen Worker Task hash, dispatched Worker session, Case/Expected, official script, API evidence and runner report. The first attempt's contract rejection was diagnosed and repaired before the formal result was committed; it does not invalidate or replace the formal run. No script, result, or Worker artifact was modified during this independent review."
+        ],
+        "retest_case_ids": [],
+        "return_stage": null
+      },
+      "reviewer_task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29"
+    }
+  ],
+  "retest_history": [],
+  "retest_tasks": [],
+  "active_retest": null,
+  "partial_case_results": {
+    "TC-API-CREATE-VALID": {
+      "schema_version": 2,
+      "case_id": "TC-API-CREATE-VALID",
+      "status": "FAIL",
+      "actual_execution": "API",
+      "reason_type": "product_issue",
+      "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+      "actual": "The official TypeScript/Vitest script sent the planned POST /api/items request. The service returned HTTP 500 with error=valid_item_creation_failed and item_name=Phase5 Item instead of HTTP 201 containing the planned item identity.",
+      "reproduced": true,
+      "evidence_refs": [
+        "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json",
+        "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json"
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-CREATE-VALID",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "actual": "HTTP 500; response body was {\"error\":\"valid_item_creation_failed\",\"item_name\":\"Phase5 Item\"}; the planned status and item identity were not returned.",
+          "result": "fail",
+          "evidence_refs": [
+            "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json",
+            "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json"
+          ]
+        }
+      ],
+      "automation_run": {
+        "script_ref": "scripts/api/B01/TC-API-CREATE-VALID.test.ts",
+        "script_sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "static_check": "passed",
+        "debug_attempts": [
+          {
+            "attempt": 1,
+            "started_at": "2026-09-24T07:20:00.029Z",
+            "finished_at": "2026-09-24T07:20:00.274Z",
+            "exit_code": 1,
+            "script_sha256": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+            "failure_classification": "worker_script_evidence_contract_bug",
+            "diagnosis_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-evidence-contract-diagnosis.json",
+            "script_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-script.test.ts",
+            "api_evidence_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-request-response.json",
+            "runner_report_ref": "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-vitest-report.json",
+            "artifact_sha256": {
+              "script": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+              "api_evidence": "003bad89b5c9cdebd9d694e6f9df8e443e3bbe99679b265e459fcab0ea018ca1",
+              "runner_report": "793ae3e66f637746ff32a38698bf02db5412d2c0fd22188e2c6a908b5ce8f3ab"
+            }
+          }
+        ],
+        "official_run": {
+          "run_id": "vitest-B01-TC-API-CREATE-VALID-20260924T072225Z",
+          "started_at": "2026-09-24T07:22:25.032Z",
+          "finished_at": "2026-09-24T07:22:25.284Z",
+          "exit_code": 1,
+          "script_sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc",
+          "report_ref": "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json",
+          "report_sha256": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5"
+        }
+      },
+      "task_id": "B01-0b83603a329c",
+      "task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+      "agent_session_id": "/root/phase5_b01_execution_worker_run2"
+    }
+  },
+  "current_case": null,
+  "current_worker": null,
+  "case_result_ledger_ref": "internal/execution/results/case-results-ledger.json",
+  "worker_receipt_ref": "internal\\execution\\dispatch\\B01-worker-receipt.json",
+  "case_started_at": "2026-09-24T07:22:19.502738+00:00",
+  "last_completed_case": "TC-API-CREATE-VALID",
+  "frozen_results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+  "frozen_artifact_sha256": {
+    "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json": "55a3523d4ae6ceccf9014832f1e523ee04a76704d583f3d13e2387926c26c6f1",
+    "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5",
+    "scripts/api/B01/TC-API-CREATE-VALID.test.ts": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc"
+  },
+  "reviewer_receipt_ref": "internal\\execution\\dispatch\\B01-reviewer-receipt.json"
+}

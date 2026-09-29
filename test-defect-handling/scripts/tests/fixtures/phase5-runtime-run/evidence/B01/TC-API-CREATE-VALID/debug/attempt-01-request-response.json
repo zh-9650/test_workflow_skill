@@ -1,0 +1,41 @@
+{
+  "run_id": "PHASE5-RUN-002",
+  "batch_id": "B01",
+  "case_id": "TC-API-CREATE-VALID",
+  "expected_id": "A-TC-API-CREATE-VALID",
+  "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+  "actual": {
+    "status": 500,
+    "body": {
+      "error": "valid_item_creation_failed",
+      "item_name": "Phase5 Item"
+    }
+  },
+  "result": {
+    "status_is_201": false,
+    "body_contains_expected_identity": false
+  },
+  "api_evidence": {
+    "redacted": true,
+    "request": {
+      "method": "POST",
+      "url": "http://127.0.0.1:4174/api/items",
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "id": "item-phase5-b01",
+        "name": "Phase5 Item"
+      }
+    },
+    "response": {
+      "status": 500,
+      "body": {
+        "error": "valid_item_creation_failed",
+        "item_name": "Phase5 Item"
+      },
+      "durationMs": 11,
+      "correlationId": "phase5-1790234400264"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "workflow_version": "2.0.0",
+  "task_id": "B01-reviewer-001",
+  "agent_role": "result_reviewer",
+  "batch_id": "B01",
+  "case_order": [
+    "TC-API-CREATE-VALID"
+  ],
+  "worker_task_id": "B01-0b83603a329c",
+  "worker_task_hash": "f24f88b33315915dba16dd79108cb67e5ff3e9c3dcf8afc3bfad82eb5b938e41",
+  "worker_session_id": "/root/phase5_b01_execution_worker_run2",
+  "results_ref": "internal\\execution\\results\\B01-worker-results.json",
+  "results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B01-worker-self-review.json",
+  "worker_self_review_sha256": "1bb008a53b4b7155aa43050f77715b78890a0293976f5cddcbaacf3b8287eb25",
+  "artifact_sha256": {
+    "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json": "55a3523d4ae6ceccf9014832f1e523ee04a76704d583f3d13e2387926c26c6f1",
+    "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5",
+    "scripts/api/B01/TC-API-CREATE-VALID.test.ts": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc"
+  },
+  "artifact_snapshot_manifest": {
+    "evidence/B01/TC-API-CREATE-VALID/api/create-request-response.json": {
+      "snapshot_ref": "internal/execution/snapshots/d284faa0eb44ec5f/001-create-request-response.json",
+      "sha256": "55a3523d4ae6ceccf9014832f1e523ee04a76704d583f3d13e2387926c26c6f1"
+    },
+    "evidence/B01/TC-API-CREATE-VALID/runner/vitest-report.json": {
+      "snapshot_ref": "internal/execution/snapshots/d284faa0eb44ec5f/002-vitest-report.json",
+      "sha256": "9466da81d620615a53afb04a840ad76bb311416bef76c9bbabe5df1c1327f9b5"
+    },
+    "scripts/api/B01/TC-API-CREATE-VALID.test.ts": {
+      "snapshot_ref": "internal/execution/snapshots/d284faa0eb44ec5f/003-TC-API-CREATE-VALID.test.ts",
+      "sha256": "a8b6b7a420b7fc58f6c3c4850d4e36422d605133ac9edc5254c1f66d08447dfc"
+    }
+  },
+  "created_at": "2026-09-24T07:23:55.061000+00:00",
+  "artifact_snapshot_sha256": "073cc53344012830e0eb96bb36a13ab307fe0180f1a208219522ff9d0ae2cb39",
+  "task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29"
+}

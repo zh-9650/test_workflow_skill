@@ -62,6 +62,97 @@ def _validate_automation(c, main, batch_id, script_targets):
     script_targets[target]=cid
 
 
+def _validate_jev_policy(c, main, exp_ids):
+    cid = c['case_id']
+    jev = c.get('jev_policy')
+    if not isinstance(jev, dict):
+        fail(f'{cid}.jev_policy', 'explicit jev_policy object (required|conditional|none) is required')
+    mode = jev.get('mode')
+    if mode not in {'required', 'conditional', 'none'}:
+        fail(f'{cid}.jev_policy.mode', 'must be required, conditional, or none')
+    if mode == 'none':
+        return
+    if main == '人工':
+        fail(f'{cid}.jev_policy', 'manual Case cannot plan Jev invocation')
+    tt = jev.get('target_type')
+    if main == 'UI' and tt not in {'ui_candidate_revalidation', 'ui_candidate_selection'}:
+        fail(f'{cid}.jev_policy.target_type', 'UI Case must use target_type=ui_candidate_revalidation or ui_candidate_selection')
+    if main == 'API' and tt != 'api_semantic_judgment':
+        fail(f'{cid}.jev_policy.target_type', 'API Case must use target_type=api_semantic_judgment')
+    purpose = jev.get('purpose')
+    if not isinstance(purpose, str) or not purpose.strip():
+        fail(f'{cid}.jev_policy.purpose', 'non-empty purpose is required')
+    trigger = jev.get('trigger_condition')
+    if not isinstance(trigger, str) or not trigger.strip():
+        fail(f'{cid}.jev_policy.trigger_condition', 'non-empty trigger_condition is required')
+    options = jev.get('bounded_options')
+    if not isinstance(options, list) or len(options) < 1 or any(not isinstance(x, str) or not x.strip() for x in options):
+        fail(f'{cid}.jev_policy.bounded_options', 'non-empty list of string options required')
+    fallback = jev.get('failure_fallback')
+    if not isinstance(fallback, str) or not fallback.strip():
+        fail(f'{cid}.jev_policy.failure_fallback', 'failure_fallback is required')
+    if 'switch_provider' in fallback.lower() or 'laya' in fallback.lower():
+        fail(f'{cid}.jev_policy.failure_fallback', 'switching provider is forbidden')
+    cost_cap = jev.get('max_cost_usd')
+    if cost_cap is not None:
+        if not isinstance(cost_cap, (int, float)) or cost_cap <= 0:
+            fail(f'{cid}.jev_policy.max_cost_usd', 'max_cost_usd must be a positive number when specified')
+    e_ids = jev.get('expected_ids', [])
+    if not isinstance(e_ids, list) or not e_ids or any(eid not in exp_ids for eid in e_ids):
+        fail(f'{cid}.jev_policy.expected_ids', 'must map to valid Expected IDs in this Case')
+
+
+def _validate_run_context(plan, cases, require_context=False):
+    env = plan.get('target_environment')
+    if env is None and require_context:
+        fail('target_environment', 'target_environment object required in Execution Plan')
+    if env is not None:
+        if not isinstance(env, dict):
+            fail('target_environment', 'object required')
+        if not isinstance(env.get('env_id'), str) or not env['env_id'].strip():
+            fail('target_environment.env_id', 'non-empty env_id required')
+        if not isinstance(env.get('initial_deployment_version'), str) or not env['initial_deployment_version'].strip():
+            fail('target_environment.initial_deployment_version', 'initial_deployment_version required')
+        if any(c.get('primary_execution') == 'API' for c in cases):
+            url = env.get('api_base_url')
+            if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
+                fail('target_environment.api_base_url', 'valid HTTP(S) URL required for API execution')
+        if any(c.get('primary_execution') == 'UI' for c in cases):
+            url = env.get('web_base_url')
+            if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
+                fail('target_environment.web_base_url', 'valid HTTP(S) URL required for UI execution')
+
+    dp = plan.get('defect_platform')
+    if dp is None and require_context:
+        fail('defect_platform', 'defect_platform object required in Execution Plan')
+    if dp is not None:
+        if not isinstance(dp, dict):
+            fail('defect_platform', 'object required')
+        if not isinstance(dp.get('platform_type'), str) or not dp['platform_type'].strip():
+            fail('defect_platform.platform_type', 'platform_type required')
+        if not isinstance(dp.get('project_key') or dp.get('project_id'), str):
+            fail('defect_platform.project_key', 'project_key or project_id required')
+        cred = dp.get('credential_ref', '')
+        if isinstance(cred, str) and any(bad in cred.lower() for bad in ('password123', 'secret123', 'admin123')):
+            fail('defect_platform.credential_ref', 'must be a reference, not a plain secret value')
+
+    dr = plan.get('data_requirements')
+    if dr is not None:
+        if not isinstance(dr, list):
+            fail('data_requirements', 'list required')
+        case_ids = {c['case_id'] for c in cases}
+        for i, item in enumerate(dr):
+            p = f'data_requirements[{i}]'
+            if not isinstance(item, dict): fail(p, 'object required')
+            if item.get('scope') not in {'base_resource', 'batch_dedicated', 'runtime_generated'}:
+                fail(p + '.scope', 'must be base_resource, batch_dedicated, or runtime_generated')
+            if not isinstance(item.get('object_type'), str) or not item['object_type'].strip():
+                fail(p + '.object_type', 'non-empty object_type required')
+            cids = item.get('case_ids', [])
+            if not isinstance(cids, list) or any(cid not in case_ids for cid in cids):
+                fail(p + '.case_ids', 'must map to cases in this plan')
+
+
 def _confirmed_case_map(confirmed_cases):
     cases=confirmed_cases.get('cases',[]) if isinstance(confirmed_cases,dict) else []
     ids=[c.get('case_id') for c in cases]
@@ -81,7 +172,7 @@ def _assert_case_source(plan_case,confirmed):
             fail(f'{cid}.{field}','must exactly equal the confirmed Case')
 
 
-def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sha256=None):
+def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sha256=None,require_context=True):
     if type(plan.get('schema_version')) is not int or plan['schema_version'] != EXECUTION_SCHEMA_VERSION:
         fail('schema_version',f'execution plan requires schema_version={EXECUTION_SCHEMA_VERSION}')
     cases=plan.get('cases'); batches=plan.get('batches')
@@ -174,6 +265,8 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
                 fail(f'{cid}.evidence_plan.read_back_required','confirmed Case evidence policy requires read_back')
             if ep['read_back_required'] and 'read_back' not in api_kinds: fail(f'{cid}.evidence_plan.api','required read_back evidence is missing')
         if c.get('downloads_file') is True and not ep['files']: fail(f'{cid}.evidence_plan.files','download case requires files evidence')
+        if c.get('jev_policy') is not None or require_context:
+            _validate_jev_policy(c, main, set(exp_ids))
 
     for bid,b in batch_by_id.items():
         for cid in b['case_ids']:
@@ -200,11 +293,18 @@ def validate(plan,require_confirmed=True,confirmed_cases=None,confirmed_cases_sh
         color[n]=2
     for cid in graph:
         if color[cid]==0: dfs(cid,[])
+
+    _validate_run_context(plan, cases, require_context=require_context)
     return {'ok':True,'cases':len(case_by_id),'batches':len(batch_by_id),'confirmed_cases_bound':True}
 
 
 if __name__=='__main__':
-    a=argparse.ArgumentParser(); a.add_argument('--input',required=True); a.add_argument('--confirmed-cases',required=True); a.add_argument('--allow-waiting-confirmation',action='store_true'); x=a.parse_args()
+    a=argparse.ArgumentParser()
+    a.add_argument('--input',required=True)
+    a.add_argument('--confirmed-cases',required=True)
+    a.add_argument('--allow-waiting-confirmation',action='store_true')
+    a.add_argument('--require-context',action='store_true',default=True,help='require run_context and jev_policy (default True)')
+    x=a.parse_args()
     cp=Path(x.confirmed_cases).resolve(); confirmed_design=json.loads(cp.read_text(encoding='utf-8'))
     run_dir=cp.parents[2]
     business_path=run_dir/'internal/business/business-model.json'; points_path=run_dir/'internal/design/test-points.json'
@@ -215,4 +315,4 @@ if __name__=='__main__':
     case_contract=importlib.util.module_from_spec(spec); spec.loader.exec_module(case_contract)
     case_contract.validate(confirmed_design,json.loads(points_path.read_text(encoding='utf-8')),json.loads(business_path.read_text(encoding='utf-8')),require_confirmed=not x.allow_waiting_confirmation)
     confirmed={'cases':case_contract.project_execution_cases(confirmed_design)}
-    print(json.dumps(validate(json.loads(Path(x.input).read_text(encoding='utf-8')),not x.allow_waiting_confirmation,confirmed,sha256(cp)),ensure_ascii=False))
+    print(json.dumps(validate(json.loads(Path(x.input).read_text(encoding='utf-8')),not x.allow_waiting_confirmation,confirmed,sha256(cp),require_context=x.require_context),ensure_ascii=False))

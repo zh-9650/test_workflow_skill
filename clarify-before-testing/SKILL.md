@@ -34,9 +34,11 @@ Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同
 
 # 1. 总流程
 
-进入目标项目前，先检查 `test-project-bootstrap` 的项目 Profile、工作流版本和 `CLAUDE.md` 测试托管区块。缺失或漂移时先完成项目级 Bootstrap，再发现或创建 Run。Bootstrap 不写 `current_stage`，普通 Run 恢复不重复初始化。目标项目若尚未经用户授权，不运行 Bootstrap 修改该项目。
+进入目标项目前，先检查 `test-project-bootstrap` 的项目 Profile、工作流版本以及宿主入口（Claude 的 `CLAUDE.md` 或 Codex 的 `AGENTS.md`）测试托管区块。两者均指向同一共享项目测试索引 `.test-workflow/PROJECT_TESTING_INDEX.md`。缺失或漂移时先完成项目级 Bootstrap，再发现或创建 Run。Bootstrap 不写 `current_stage`，普通 Run 恢复不重复初始化。目标项目若尚未经用户授权，不运行 Bootstrap 修改该项目。
 
-正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。若 Router 输出 `execute_parallel_batches(batch_ids)`，仅可为所列且已分别绑定数据的 `parallel_safe` Batch 启动独立 Runtime；所有 Batch 必须无跨 Batch 未满足依赖、Data Manifest 对象引用互不重叠。每个 Batch 各派 Worker，Worker 自审后再派该 Batch 的新会话 Reviewer；不可跨 Batch 合并角色。子 Agent 不可用时停在明确等待/阻塞状态，不能由主 Agent代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
+正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。若 Router 输出 `execute_parallel_batches(batch_ids)`，仅可为所列且已分别绑定数据的 `parallel_safe` Batch 启动独立 Runtime；所有 Batch 必须无跨 Batch 未满足依赖、Data Manifest 对象引用互不重叠。每个 Batch 各派 Worker，Worker 自审后再派该 Batch 的新会话 Reviewer；不可跨 Batch 合并角色。子 Agent 槽位不足或不可用时，进入明确等待状态（`waiting_for_worker_slot`、`waiting_for_reviewer_slot`、`subagent_unavailable`），严禁由主 Agent 代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
+
+所有 Batch 首次得到经复核的执行/受阻结论后生成**阶段快照**（`create-snapshot`），不关闭 Run，也不冒称最终报告。初测后若有缺陷，进入等待修复（`waiting_for_fix_deployment`）；修复部署核实后启动新 Worker/Reviewer 进行回归。用户明确做出的“延期/无需修复”（`postponed`/`wontfix`）处置通过 `record-disposition` 记录并移出待回归队列，保留原始失败/受阻事实及风险，不伪造 PASS。
 
 用户侧使用正常测试语言：
 
@@ -51,7 +53,7 @@ Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同
 → 等待执行方案确认
 → 当前 Batch 数据准备
 → 正式执行
-→ 缺陷处理 / 等待修复 / 回归
+→ 阶段快照 / 缺陷处理 / 等待修复部署 / 多轮回归 / 用户处置
 → 最终结果复核
 → 测试完成
 ```
@@ -105,7 +107,8 @@ work/test-runs/RUN-xxx/
 │  ├─ 01-business-understanding-review.md
 │  ├─ 02-test-points.md
 │  ├─ 02-test-point-review.md
-│  ├─ 03-test-cases.md
+│  ├─ full.md（全量用例正本，标准 7 列表格；兼容 03-test-cases.md）
+│  ├─ smoke.md（提测准入门禁，标准 4 列表格，内置 10%~30% 动态提取）
 │  ├─ 03-test-case-review.md
 │  ├─ 04-execution-plan.md
 │  └─ 05-test-report.md
@@ -137,10 +140,10 @@ work/test-runs/RUN-xxx/
 ```text
 业务理解：01-business-understanding.md + 01-business-understanding-review.md + business-model.json
 测试点：02-test-points.md + 02-test-point-review.md + test-points.json
-测试用例：03-test-cases.md + 03-test-case-review.md + test-cases.json
+测试用例：full.md（含内置 smoke.md）+ 03-test-case-review.md + test-cases.json（兼容 03-test-cases.md）
 ```
 
-其中人工确认主要看两个 MD；JSON 是机器合同与追踪依据，不要求用户阅读。不得只生成 JSON 或只给内部摘要就要求用户确认。
+其中人工确认主要看正式用例文档（`full.md`、`smoke.md`）与审查摘要；JSON 是机器合同与追踪依据，不要求用户阅读。不得只生成 JSON 或只给内部摘要就要求用户确认。
 
 内部追踪、稳定 ID、映射、状态和机器字段放 `internal/`。
 
@@ -206,6 +209,19 @@ work/test-runs/RUN-xxx/
 ```text
 references/human-review-and-confirmation.md
 ```
+
+## 4.2 测试用例确认与中枢 Git 仓库同步（可选/推荐一键入库）
+
+测试用例（`full.md` + `smoke.md`）完成自审与人工确认后，即具备入库条件：
+- **用户口令响应**：当用户在对话中确认用例并表达“推到仓库”、“同步到 Git”、“用例上传”时，Router 优先调用同步脚本：
+  ```bash
+  python clarify-before-testing/scripts/sync_case_repo.py \
+    --module <模块英文名> \
+    --run-dir work/test-runs/RUN-xxx
+  ```
+- **自动化闭环**：脚本自动 pull 防冲突 → 覆盖写入 `ai-hub/projects/<项目>/test/cases/<模块>/` → 自动统计条数并更新 `test/README.md` 索引 → commit & push master → 输出文件查看直达链接。
+- **手动操作支持**：用户亦可手动将 `deliverables/full.md` 与 `smoke.md` 拖拽至对应仓库目录并手动 push，文件名完全一致无额外转译负担。
+- 入库完成后，无缝流入下一阶段 `execution-planning`。
 
 ---
 

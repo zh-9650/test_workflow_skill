@@ -4,6 +4,9 @@ node_modules/
 test-results/
 .phase*/
 .deepeval/
-tests/
-test-project-bootstrap/
+/tests/
+scratch/
+.real-execution/
+research/
+audit_report_clean.md
 新版测试Skill改造计划.md

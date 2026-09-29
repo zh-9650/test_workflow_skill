@@ -1,0 +1,28 @@
+{
+  "run_id": "PHASE5-RUN-002",
+  "batch_id": "B01",
+  "case_id": "TC-API-CREATE-VALID",
+  "attempt": 1,
+  "script_sha256": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+  "started_at": "2026-09-24T07:20:00.029Z",
+  "finished_at": "2026-09-24T07:20:00.274Z",
+  "runner_exit_code": 1,
+  "failure_classification": "worker_script_evidence_contract_bug",
+  "observe": "The formal Vitest report shows the planned POST returned HTTP 500 and the API response evidence was written before the assertion failed.",
+  "diagnose": "The execution_control Contract rejected the response evidence because the script wrapped the redacted framework evidence under api_evidence instead of writing the framework evidence object at the JSON top level, so redacted=true was not top-level.",
+  "act": "Fix the official script to save response.evidence directly, read the dispatch-specified PHASE5_API_BASE_URL and TEST_RUN_DIR variables, rerun typecheck, then rerun the official script with the new hash.",
+  "preserved_attempt_artifacts": [
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-script.test.ts",
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-script.test.ts.sha256=ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-vitest-report.json",
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-vitest-report.json.sha256=793ae3e66f637746ff32a38698bf02db5412d2c0fd22188e2c6a908b5ce8f3ab",
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-request-response.json",
+    "evidence/B01/TC-API-CREATE-VALID/debug/attempt-01-request-response.json.sha256=003bad89b5c9cdebd9d694e6f9df8e443e3bbe99679b265e459fcab0ea018ca1"
+  ],
+  "artifact_sha256": {
+    "script": "ce5692e075356bafdcf39ff5fb55167de66a1d7b00cb50b180b7de54ccad0b02",
+    "vitest_report": "793ae3e66f637746ff32a38698bf02db5412d2c0fd22188e2c6a908b5ce8f3ab",
+    "request_response": "003bad89b5c9cdebd9d694e6f9df8e443e3bbe99679b265e459fcab0ea018ca1"
+  },
+  "product_result_committed": false
+}

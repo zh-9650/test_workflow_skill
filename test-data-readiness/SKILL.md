@@ -276,3 +276,22 @@ python clarify-before-testing/scripts/workflow_state.py set-batch-data-ready \
 - Builder 的 `object_type` 与实际创建对象一致；
 - API/UI 创建入口与已经验证的 Builder 一致。
 - Builder 语言/runner 符合 API/UI 固定技术栈；脚本位于当前 Run、Hash 与文件一致，read-back Evidence 引用真实原始观察与 runner report，并对应 Batch/Case/对象及脚本 Hash。
+
+---
+
+# 11. 数据准备阶段发现产品缺陷
+
+首次创建失败必须先诊断是脚本/权限/环境问题还是产品 Bug。
+确认为产品问题时：
+1. 走统一的“诊断 → 最小合法复现 → 查重 → 缺陷提交”流程；
+2. 提交 Bug 时标记 `source_kind="data_readiness"`；
+3. 受影响的 Case 在结果账本中标记为 `BLOCKED`，**严禁伪造未执行的 Runtime FAIL 或假的 Runner 报告**；
+4. 修复部署到目标环境后，通过回归解除受阻，重新经过 Data Readiness 准备数据并回读，再由独立 Worker 实际执行。
+
+---
+
+# 12. 账号与机密引用安全
+
+- 数据准备时绑定真实执行账号与本地机密引用；
+- 严禁在 Execution Plan、Data Manifest、脚本或证据报告中硬编码明文密码、Token 或敏感业务秘密；
+- 凭据仅从项目安全配置/本地环境变量解析引用。

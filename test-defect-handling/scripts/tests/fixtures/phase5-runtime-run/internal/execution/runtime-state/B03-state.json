@@ -1,0 +1,210 @@
+{
+  "batch_id": "B03",
+  "status": "completed",
+  "precheck": {
+    "status": "ready",
+    "reason": "precheck passed"
+  },
+  "task_ref": "internal\\execution\\tasks\\B03-task.json",
+  "worker_results_ref": "internal\\execution\\results\\B03-worker-results.json",
+  "worker_self_review_ref": "internal\\execution\\dispatch\\B03-worker-self-review.json",
+  "worker_self_review": {
+    "status": "passed",
+    "task_id": "B03-903a8fd8784e",
+    "input_task_hash": "c4b4a6bc5e70c7b1efeec1cc0ccaf92c676309d1ce08c0454ae44c7833978833",
+    "agent_session_id": "/root/phase5_b03_execution_worker_run2",
+    "results_sha256": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+    "checked_case_ids": [
+      "TC-API-CREATE-RECOVER"
+    ],
+    "checks": {
+      "all_cases_checked": true,
+      "all_expected_checked": true,
+      "execution_method_checked": true,
+      "evidence_binding_checked": true,
+      "failure_classification_checked": true,
+      "file_cleanup_checked": true
+    },
+    "findings": [
+      "The frozen B03 Task was rechecked: dependency TC-API-CREATE-VALID is a reviewer-confirmed FAIL. This Worker created the planned TypeScript/Vitest script before the first formal run; static typecheck passed, then the official single-Case Vitest report recorded 1 passed assertion with exit code 0.",
+      "The formal script reads only the frozen Runtime Task and does not import fetch or an API client. It wrote blocked_dependency evidence with request_made=false and target_action_executed=false. No target API request was sent; therefore the planned Case outcome is BLOCKED(upstream_case), not PASS.",
+      "The Case result binds the exact Worker dispatch identity, frozen Task id/hash, final script SHA-256, official Vitest report SHA-256, and blocked dependency Evidence. Runtime case-finish accepted the result. The first submission was rejected only because PowerShell emitted uppercase SHA-256; I corrected the encoding to lowercase without rerunning the Case. No scratch artifacts were left behind.",
+      "No Result Reviewer was dispatched or authored by this Worker. A fresh independent Reviewer must inspect the frozen result and Evidence next."
+    ],
+    "artifact_sha256": {
+      "script": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+      "blocked_dependency_evidence": "124820b2aa1fbfbc9950ddb638010e2fd3e1f7b898c02ca170e1e95e5b1311aa",
+      "vitest_report": "68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78",
+      "worker_results": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa"
+    }
+  },
+  "worker_dispatch_receipt": {
+    "agent_role": "execution_worker",
+    "task_id": "B03-903a8fd8784e",
+    "task_hash": "c4b4a6bc5e70c7b1efeec1cc0ccaf92c676309d1ce08c0454ae44c7833978833",
+    "agent_session_id": "/root/phase5_b03_execution_worker_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b03_execution_worker_run2",
+    "started_at": "2026-09-24T07:44:13Z",
+    "accepted_at": "2026-09-24T07:44:23.260130+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:47:16.282491+00:00",
+    "result_status": {
+      "overall": "BLOCKED",
+      "cases": {
+        "TC-API-CREATE-RECOVER": "BLOCKED"
+      }
+    },
+    "outputs": {
+      "internal\\execution\\results\\B03-worker-results.json": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+      "internal\\execution\\dispatch\\B03-worker-self-review.json": "f8d11f058f589567ee40542ba2221da1fb712596fc4b93421b56cbc8b99bf34f"
+    }
+  },
+  "reviewer_task_ref": "internal\\execution\\dispatch\\B03-reviewer-task.json",
+  "reviewer_dispatch_receipt": {
+    "agent_role": "result_reviewer",
+    "task_id": "B03-reviewer-001",
+    "task_hash": "dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5",
+    "agent_session_id": "/root/phase5_b03_result_reviewer_run2",
+    "dispatch_source": "codex_subagent_tool",
+    "host_dispatch_ref": "/root/phase5_b03_result_reviewer_run2",
+    "started_at": "2026-09-24T07:47:53Z",
+    "accepted_at": "2026-09-24T07:48:02.909237+00:00",
+    "receipt_status": "completed",
+    "finished_at": "2026-09-24T07:49:29.004101+00:00",
+    "result_status": "passed",
+    "outputs": {
+      "internal/execution/reviews/B03-reviewer-result.json": "70deec22f1c0a9f20c7e5b3db7c76e29ce888acfe38aa676c37a464fbdf62190"
+    }
+  },
+  "reviewer": {
+    "schema_version": 2,
+    "reviewer_task_id": "B03-reviewer-001",
+    "input_task_hash": "dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5",
+    "input_results_sha256": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+    "agent_session_id": "/root/phase5_b03_result_reviewer_run2",
+    "status": "passed",
+    "checked_case_ids": [
+      "TC-API-CREATE-RECOVER"
+    ],
+    "retest_case_ids": [],
+    "return_stage": null,
+    "checks": {
+      "completeness_checked": true,
+      "method_consistency_checked": true,
+      "judgement_checked": true,
+      "evidence_checked": true,
+      "abnormal_classification_checked": true
+    },
+    "findings": [
+      "Independently checked frozen Reviewer Task B03-reviewer-001 (task hash dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5) and its immutable artifact snapshot manifest. The Worker session is /root/phase5_b03_execution_worker_run2, different from this Reviewer session /root/phase5_b03_result_reviewer_run2. The frozen Worker results SHA-256 is 521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa.",
+      "The B03 Task binds TC-API-CREATE-RECOVER to the planned TypeScript + Vitest + Node native fetch API method and expected GET /api/items/item-phase5-b01, but its frozen dependency_context says TC-API-CREATE-VALID in B01 is status=FAIL, final_result=FAIL, reviewer_confirmed=true. Therefore the target GET was correctly not attempted and the Case is BLOCKED(upstream_case), NOT_EXECUTED; Vitest exit code 0 represents only a passing gate assertion, not a Case PASS.",
+      "The formal script scripts/api/B03/TC-API-CREATE-RECOVER.test.ts is present in the frozen snapshot and has SHA-256 2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520, matching the Reviewer Task, Worker result and official-run binding. It reads the frozen Runtime Task, asserts the exact dependency identity/status/reviewer confirmation, writes blocked_dependency evidence, and has no fetch import or API client/request call. The runner report names this script and reports one passing gate assertion; the bound exit code is 0. The separate gate report is not mistaken for execution of the planned GET.",
+      "Recomputed SHA-256 values match the Reviewer Task snapshot manifest for blocked-dependency evidence (124820b2aa1fbfbc9950ddb638010e2fd3e1f7b898c02ca170e1e95e5b1311aa), Vitest report (68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78), script (2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520), and Worker results (521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa). The live gate evidence equals its immutable snapshot and states request_made=false, target_action_executed=false, affected_by=[TC-API-CREATE-VALID], and dependency result FAIL/reviewer_confirmed=true; these align with the trusted Task dependency_context and Result's affected_by, blocked_reason_type, NOT_EXECUTED and target_action_executed=false.",
+      "The Case has one planned Expected and the result maps that Expected to blocked before target action with both gate and runner-report evidence references. The report and evidence do not fabricate request/response data. I found no mismatched dependency, script/result/report hash, Case mapping, or false PASS. This review confirms the present upstream BLOCKED result only; it does not satisfy the Case Expected, run B01 Regression, or prove the later GET/read-back. No API request was made during this review."
+    ]
+  },
+  "review_history": [
+    {
+      "type": "initial_or_batch_review",
+      "review": {
+        "schema_version": 2,
+        "reviewer_task_id": "B03-reviewer-001",
+        "input_task_hash": "dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5",
+        "input_results_sha256": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+        "agent_session_id": "/root/phase5_b03_result_reviewer_run2",
+        "status": "passed",
+        "checked_case_ids": [
+          "TC-API-CREATE-RECOVER"
+        ],
+        "retest_case_ids": [],
+        "return_stage": null,
+        "checks": {
+          "completeness_checked": true,
+          "method_consistency_checked": true,
+          "judgement_checked": true,
+          "evidence_checked": true,
+          "abnormal_classification_checked": true
+        },
+        "findings": [
+          "Independently checked frozen Reviewer Task B03-reviewer-001 (task hash dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5) and its immutable artifact snapshot manifest. The Worker session is /root/phase5_b03_execution_worker_run2, different from this Reviewer session /root/phase5_b03_result_reviewer_run2. The frozen Worker results SHA-256 is 521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa.",
+          "The B03 Task binds TC-API-CREATE-RECOVER to the planned TypeScript + Vitest + Node native fetch API method and expected GET /api/items/item-phase5-b01, but its frozen dependency_context says TC-API-CREATE-VALID in B01 is status=FAIL, final_result=FAIL, reviewer_confirmed=true. Therefore the target GET was correctly not attempted and the Case is BLOCKED(upstream_case), NOT_EXECUTED; Vitest exit code 0 represents only a passing gate assertion, not a Case PASS.",
+          "The formal script scripts/api/B03/TC-API-CREATE-RECOVER.test.ts is present in the frozen snapshot and has SHA-256 2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520, matching the Reviewer Task, Worker result and official-run binding. It reads the frozen Runtime Task, asserts the exact dependency identity/status/reviewer confirmation, writes blocked_dependency evidence, and has no fetch import or API client/request call. The runner report names this script and reports one passing gate assertion; the bound exit code is 0. The separate gate report is not mistaken for execution of the planned GET.",
+          "Recomputed SHA-256 values match the Reviewer Task snapshot manifest for blocked-dependency evidence (124820b2aa1fbfbc9950ddb638010e2fd3e1f7b898c02ca170e1e95e5b1311aa), Vitest report (68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78), script (2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520), and Worker results (521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa). The live gate evidence equals its immutable snapshot and states request_made=false, target_action_executed=false, affected_by=[TC-API-CREATE-VALID], and dependency result FAIL/reviewer_confirmed=true; these align with the trusted Task dependency_context and Result's affected_by, blocked_reason_type, NOT_EXECUTED and target_action_executed=false.",
+          "The Case has one planned Expected and the result maps that Expected to blocked before target action with both gate and runner-report evidence references. The report and evidence do not fabricate request/response data. I found no mismatched dependency, script/result/report hash, Case mapping, or false PASS. This review confirms the present upstream BLOCKED result only; it does not satisfy the Case Expected, run B01 Regression, or prove the later GET/read-back. No API request was made during this review."
+        ]
+      },
+      "reviewer_task_hash": "dcc0af7fbd1e7fc8e328d30ba8fc003de94699e9b091a5bbaf381ce628ac71c5"
+    }
+  ],
+  "retest_history": [],
+  "retest_tasks": [],
+  "active_retest": null,
+  "partial_case_results": {
+    "TC-API-CREATE-RECOVER": {
+      "schema_version": 2,
+      "case_id": "TC-API-CREATE-RECOVER",
+      "status": "BLOCKED",
+      "actual_execution": "NOT_EXECUTED",
+      "target_action_executed": false,
+      "blocked_reason_type": "upstream_case",
+      "blocked_reason": "B01 TC-API-CREATE-VALID is reviewer-confirmed FAIL; the planned GET must wait for B01 Regression to pass.",
+      "affected_by": [
+        "TC-API-CREATE-VALID"
+      ],
+      "expected": "After reviewer-confirmed B01 Regression PASS, GET returns id=item-phase5-b01 and name=Phase5 Item.",
+      "actual": "No target action was executed. The official Vitest gate assertion confirmed the frozen Runtime Task contains reviewer-confirmed B01 FAIL, and recorded blocked_dependency evidence; no HTTP request was made.",
+      "reason_type": "upstream_dependency",
+      "reproduced": false,
+      "evidence_refs": [
+        "evidence/B03/TC-API-CREATE-RECOVER/gate/blocked-dependency.json",
+        "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json"
+      ],
+      "expected_results": [
+        {
+          "id": "A-TC-API-CREATE-RECOVER",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching B01 Regression result",
+          "actual": "BLOCKED before target action: dependency TC-API-CREATE-VALID is reviewer-confirmed FAIL. No API request was made.",
+          "result": "blocked",
+          "evidence_refs": [
+            "evidence/B03/TC-API-CREATE-RECOVER/gate/blocked-dependency.json",
+            "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json"
+          ]
+        }
+      ],
+      "automation_run": {
+        "script_ref": "scripts/api/B03/TC-API-CREATE-RECOVER.test.ts",
+        "script_sha256": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+        "runner": "vitest",
+        "driver": "node-native-fetch",
+        "static_check": "passed",
+        "debug_attempts": [],
+        "official_run": {
+          "run_id": "vitest-B03-TC-API-CREATE-RECOVER-20260924T074535Z",
+          "started_at": "2026-09-24T07:45:35.781Z",
+          "finished_at": "2026-09-24T07:45:36.200Z",
+          "exit_code": 0,
+          "script_sha256": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520",
+          "report_ref": "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json",
+          "report_sha256": "68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78"
+        }
+      },
+      "task_id": "B03-903a8fd8784e",
+      "task_hash": "c4b4a6bc5e70c7b1efeec1cc0ccaf92c676309d1ce08c0454ae44c7833978833",
+      "agent_session_id": "/root/phase5_b03_execution_worker_run2"
+    }
+  },
+  "current_case": null,
+  "current_worker": null,
+  "case_result_ledger_ref": "internal/execution/results/case-results-ledger.json",
+  "worker_receipt_ref": "internal\\execution\\dispatch\\B03-worker-receipt.json",
+  "case_started_at": "2026-09-24T07:44:23.384530+00:00",
+  "last_completed_case": "TC-API-CREATE-RECOVER",
+  "frozen_results_sha256": "521f52010baa7dac4431622592e5a578a00caf42b603257636533a59fe4248aa",
+  "frozen_artifact_sha256": {
+    "evidence/B03/TC-API-CREATE-RECOVER/gate/blocked-dependency.json": "124820b2aa1fbfbc9950ddb638010e2fd3e1f7b898c02ca170e1e95e5b1311aa",
+    "evidence/B03/TC-API-CREATE-RECOVER/runner/vitest-report.json": "68bc5f683773f685189dcf632f9c40e571973d44f5e626c999a7d9fba7471f78",
+    "scripts/api/B03/TC-API-CREATE-RECOVER.test.ts": "2ccbbd2d4f86ab0d37848bb994af4d521c2310b78cca0504f7602dac8f1b0520"
+  },
+  "reviewer_receipt_ref": "internal\\execution\\dispatch\\B03-reviewer-receipt.json"
+}

@@ -1,0 +1,8 @@
+{
+  "environment_ready": true,
+  "environment_id": "phase5-local-synthetic",
+  "api_base_url": "http://127.0.0.1:4174",
+  "authentication": "none; loopback-only synthetic fixture",
+  "available_tools": ["Node.js", "TypeScript", "Vitest", "native fetch"],
+  "external_services": false
+}

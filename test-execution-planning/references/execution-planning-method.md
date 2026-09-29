@@ -69,3 +69,18 @@ UI 截图不一定能证明数据库业务事实；API 200 也不一定能证明
 - Agent 等什么结果；
 - 如何回填 Actual/Evidence；
 - 后续如何继续。
+
+## 7. 执行上下文与缺陷平台绑定
+
+Planning 必须确定：
+- 目标环境 (`target_environment`)：指定 Web / API 访问入口和初测基线部署版本；
+- 缺陷平台 (`defect_platform`)：平台类型、项目标识与凭据引用（严禁明文密码）；
+- 数据需求分类 (`data_requirements`)：区分 `base_resource`、`batch_dedicated` 与 `runtime_generated`。
+
+## 8. 有界 Jev 策略
+
+对于需要大模型辅助的步骤或 Expected：
+- UI Case 仅允许 `ui_candidate_revalidation`（候选定位辅助），驱动仍为 Playwright；
+- API Case 仅允许 `api_semantic_judgment`（语义级期望判定），驱动仍为 Vitest + Node fetch；
+- 严禁供应商切换回退 (`failure_fallback`)，必须明确成本上限与 Expected 映射；
+- 线上真实调用必须获用户授权。

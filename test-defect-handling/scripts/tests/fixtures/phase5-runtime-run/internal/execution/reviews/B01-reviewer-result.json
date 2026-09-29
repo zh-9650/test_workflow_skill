@@ -1,0 +1,26 @@
+{
+  "schema_version": 2,
+  "reviewer_task_id": "B01-reviewer-001",
+  "input_task_hash": "8418621bef251aeccbad6685118ece8ae669fbd88772b52e5a93f0ae8072ea29",
+  "input_results_sha256": "3b54cf624d1bf7ba2149beca8d8379ff2caff5d7644e47e755fc29f9bb4fcc76",
+  "agent_session_id": "/root/phase5_b01_result_reviewer_run2",
+  "status": "passed",
+  "checked_case_ids": [
+    "TC-API-CREATE-VALID"
+  ],
+  "checks": {
+    "completeness_checked": true,
+    "method_consistency_checked": true,
+    "judgement_checked": true,
+    "evidence_checked": true,
+    "abnormal_classification_checked": true
+  },
+  "findings": [
+    "The formal Result correctly excludes attempt 01. Its separate diagnostic records worker_script_evidence_contract_bug, its malformed wrapper evidence and distinct script/report/evidence hashes are preserved under evidence/B01/TC-API-CREATE-VALID/debug/, and none of those debug files are listed as official Case evidence. The repaired official script is a separate artifact with the new frozen SHA-256.",
+    "Independently recomputed SHA-256 values for the frozen script, official request/response evidence, official Vitest report, Worker results and Worker self-review all match the Reviewer Task and frozen bindings. The formal TypeScript script sends exactly the planned POST /api/items body using the project API helper (Node native fetch), writes the framework response.evidence directly so redacted=true is top-level, then asserts both HTTP 201 and the expected id/name. A fresh npm run typecheck completed successfully with exit code 0.",
+    "The formal report is the actual Vitest JSON report for the exact formal script path and contains one failed assertion, expected 201 versus observed 500. Its runner start/end epoch values fall within the Worker-reported official execution window. The separately frozen API evidence records the exact planned URL/method/body and matching HTTP 500 response, with redacted=true. The error payload valid_item_creation_failed for Phase5 Item matches the synthetic fixture's explicit injected product-failure branch; it is not a transport, test-data, or assertion-script failure. The expected status and returned identity are absent, so the Case is a supported product FAIL.",
+    "The result and self-review bind the frozen Worker Task hash, dispatched Worker session, Case/Expected, official script, API evidence and runner report. The first attempt's contract rejection was diagnosed and repaired before the formal result was committed; it does not invalidate or replace the formal run. No script, result, or Worker artifact was modified during this independent review."
+  ],
+  "retest_case_ids": [],
+  "return_stage": null
+}
