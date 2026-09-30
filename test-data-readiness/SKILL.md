@@ -295,3 +295,7 @@ python clarify-before-testing/scripts/workflow_state.py set-batch-data-ready \
 - 数据准备时绑定真实执行账号与本地机密引用；
 - 严禁在 Execution Plan、Data Manifest、脚本或证据报告中硬编码明文密码、Token 或敏感业务秘密；
 - 凭据仅从项目安全配置/本地环境变量解析引用。
+
+使用 schema v3 的 Data Manifest，按 Planning 的每个 `(Case, scope, object_type)` 对账；`runtime_generated` 只校验账号和权限，不提前制造执行产物。每个 actor_binding 包含 `actor_ref`、安全 `secret_ref`、`roles`、`permissions`、适用 Case、原始验证文件与 SHA。对象含 `data_category`、来源、scope、owner、applicable_version、actor/secret 引用和 creation_attempts；逐项合法创建、读回并保存 runner 报告。部署后 Manifest 的 `applicable_version` 必须等于最新部署版本。
+
+数据准备 Bug 的修复不走需要真实 Runtime FAIL 的 `regression-prepare`。返回本 Batch 数据准备并重验，Router 绑定新版 Manifest 后首次 `prepare`；Runtime 会冻结 `data_readiness_recovery`。独立 Reviewer 必须输出相应 `data_readiness_recovery_reviews`，确认新数据读回与部署证据。账本保留 `preparation_history` 的 BLOCKED；首次正式结果仍是 PASS/FAIL/BLOCKED，不伪造 PASS_AFTER_FIX。

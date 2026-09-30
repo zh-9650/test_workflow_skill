@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import pytest
 import json
+import hashlib
 
 _defect_path = Path(__file__).resolve().parents[1] / "defect_contract.py"
 _defect_spec = importlib.util.spec_from_file_location("defect_contract", _defect_path)
@@ -72,70 +73,109 @@ def test_apply_defect_to_ledger_refuses_failed_submission(tmp_path):
         _defect.apply_defect_to_ledger(run_dir, payload)
 
 
-def test_validate_reg_rejects_mismatched_target_environment():
+def test_validate_reg_rejects_mismatched_target_environment(tmp_path):
     baseline = {
         "target_environment": {"env_id": "staging"},
         "cases": [
             {"case_id": "TC-001", "primary_execution": "API"}
         ]
     }
-    v = {
-        "regression_id": "REG-001",
-        "bug_ref": "BUG-100",
-        "original_case_ids": ["TC-001"],
-        "impact_case_ids": [],
-        "cases": [
-            {"case_id": "TC-001", "primary_execution": "API"}
-        ],
-        "status": "pending",
-        "target_environment": "production"
-    }
+    v = _complete_pending_regression(tmp_path)
+    v["target_environment"] = "production"
     with pytest.raises(AssertionError, match="does not match planned env"):
-        _defect.validate_reg(v, baseline)
+        _defect.validate_reg(v, baseline, evidence_root=tmp_path)
 
 
-def test_validate_reg_rejects_empty_deployment_version():
+def test_validate_reg_rejects_empty_deployment_version(tmp_path):
     baseline = {
         "target_environment": {"env_id": "staging"},
         "cases": [
             {"case_id": "TC-001", "primary_execution": "API"}
         ]
     }
-    v = {
-        "regression_id": "REG-001",
-        "bug_ref": "BUG-100",
-        "original_case_ids": ["TC-001"],
-        "impact_case_ids": [],
-        "cases": [
-            {"case_id": "TC-001", "primary_execution": "API"}
-        ],
-        "status": "pending",
-        "target_environment": "staging",
-        "deployment_version": "  "
-    }
+    v = _complete_pending_regression(tmp_path)
+    v["deployment_version"] = "  "
     with pytest.raises(AssertionError, match="non-empty deployment_version required"):
-        _defect.validate_reg(v, baseline)
+        _defect.validate_reg(v, baseline, evidence_root=tmp_path)
 
 
-def test_validate_reg_rejects_invalid_impact_analysis():
+def test_validate_reg_rejects_invalid_impact_analysis(tmp_path):
     baseline = {
         "target_environment": {"env_id": "staging"},
         "cases": [
             {"case_id": "TC-001", "primary_execution": "API"}
         ]
     }
-    v = {
+    v = _complete_pending_regression(tmp_path)
+    v["impact_analysis"] = "not_an_object"
+    with pytest.raises(AssertionError, match="impact_analysis must be an object"):
+        _defect.validate_reg(v, baseline, evidence_root=tmp_path)
+
+
+def _write_deployment_event(run_dir, impact=None):
+    impact = impact or {
+        "old_pass_retest_needed": False,
+        "affected_pass_cases": [],
+        "data_recheck_needed": True,
+        "rationale": "Authentication fixtures changed with the fix",
+    }
+    rel = Path("internal/execution/deployments/deploy-001.json")
+    path = run_dir / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = {
+        "event_id": "deploy-001",
+        "target_env": "staging",
+        "deployment_version": "v1.0.1",
+        "verified_at": "2026-09-29T00:00:00+00:00",
+        "impact_decision": impact,
+    }
+    path.write_text(json.dumps(event), encoding="utf-8")
+    return rel.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest(), impact
+
+
+def _complete_pending_regression(run_dir):
+    event_ref, event_sha, impact = _write_deployment_event(run_dir)
+    return {
         "regression_id": "REG-001",
         "bug_ref": "BUG-100",
         "original_case_ids": ["TC-001"],
         "impact_case_ids": [],
-        "cases": [
-            {"case_id": "TC-001", "primary_execution": "API"}
-        ],
+        "cases": [{"case_id": "TC-001", "primary_execution": "API"}],
         "status": "pending",
         "target_environment": "staging",
         "deployment_version": "v1.0.1",
-        "impact_analysis": "not_an_object"
+        "deployment_event_ref": event_ref,
+        "deployment_event_sha256": event_sha,
+        "impact_analysis": impact,
     }
-    with pytest.raises(AssertionError, match="impact_analysis must be an object"):
-        _defect.validate_reg(v, baseline)
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "target_environment",
+        "deployment_version",
+        "deployment_event_ref",
+        "deployment_event_sha256",
+        "impact_analysis",
+    ],
+)
+def test_validate_reg_requires_verified_deployment_binding(tmp_path, missing):
+    baseline = {
+        "target_environment": {"env_id": "staging"},
+        "cases": [{"case_id": "TC-001", "primary_execution": "API"}],
+    }
+    regression = _complete_pending_regression(tmp_path)
+    regression.pop(missing)
+    with pytest.raises(AssertionError, match=missing):
+        _defect.validate_reg(regression, baseline, evidence_root=tmp_path)
+
+
+def test_validate_reg_accepts_verified_deployment_binding(tmp_path):
+    baseline = {
+        "target_environment": {"env_id": "staging"},
+        "cases": [{"case_id": "TC-001", "primary_execution": "API"}],
+    }
+    regression = _complete_pending_regression(tmp_path)
+    out = _defect.validate_reg(regression, baseline, evidence_root=tmp_path)
+    assert out["ok"] is True

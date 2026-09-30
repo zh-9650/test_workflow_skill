@@ -37,6 +37,57 @@ def _load_confirmed_plan(run_dir):
     plan=json.loads(plan_path.read_text(encoding='utf-8'))
     return plan_path,plan
 
+def validate_data_readiness_review(run_dir,ref,batch_id,case_ids):
+    base=Path(run_dir).resolve()
+    if not isinstance(ref,str) or not ref: fail('data_readiness_review_ref','Run-relative review file required')
+    path=(base/ref).resolve()
+    if not _inside(path,base/'internal/data/reviews') or not path.is_file():
+        fail('data_readiness_review_ref','must be a real file under internal/data/reviews')
+    review=json.loads(path.read_text(encoding='utf-8'))
+    if review.get('schema_version')!=3 or review.get('source_kind')!='data_readiness' or review.get('status')!='passed':
+        fail('data_readiness_review','v3 passed data_readiness review required')
+    if review.get('batch_id')!=batch_id or set(review.get('affected_case_ids',[]))!=set(case_ids):
+        fail('data_readiness_review','review Batch/Case scope must exactly match the defect source')
+    if review.get('legal_reproduction_verified') is not True or not review.get('blocked_reason'):
+        fail('data_readiness_review','legal reproduction and blocked reason required')
+    artifacts={}
+    for name,root in [('reviewer_task','internal/data/reviews'),('reviewer_receipt','internal/data/reviews'),('preparation_failure','evidence'),('host_events','internal/data/reviews')]:
+        p=(base/str(review.get(name+'_ref',''))).resolve()
+        if not _inside(p,base/root) or not p.is_file() or _sha256(p)!=review.get(name+'_sha256'):
+            fail('data_readiness_review.'+name,'real artifact and matching SHA-256 required')
+        artifacts[name]=json.loads(p.read_text(encoding='utf-8'))
+    task=artifacts['reviewer_task']; receipt=artifacts['reviewer_receipt']; failure=artifacts['preparation_failure']
+    session=review.get('reviewer_session_id')
+    if not session or session==failure.get('preparer_session_id') or not failure.get('preparer_session_id'):
+        fail('data_readiness_review.reviewer_session_id','fresh Reviewer must differ from data preparer')
+    if (receipt.get('agent_role')!='result_reviewer' or receipt.get('receipt_status')!='completed'
+        or receipt.get('agent_session_id')!=session or receipt.get('dispatch_source') not in {'codex_subagent_tool','claude_task_tool','antigravity_subagent_tool'}
+        or not receipt.get('host_dispatch_ref') or receipt.get('task_id')!=task.get('task_id')
+        or receipt.get('task_hash')!=review['reviewer_task_sha256']):
+        fail('data_readiness_review.reviewer_receipt','completed host Reviewer receipt must bind exact Task and session')
+    if task.get('batch_id')!=batch_id or set(task.get('case_ids',[]))!=set(case_ids) or task.get('preparation_failure_sha256')!=review['preparation_failure_sha256']:
+        fail('data_readiness_review.reviewer_task','must freeze Batch, Case scope and preparation failure')
+    if failure.get('batch_id')!=batch_id or set(failure.get('affected_case_ids',[]))!=set(case_ids) or failure.get('legal_reproduction') is not True:
+        fail('data_readiness_review.preparation_failure','must bind legally reproduced preparation failure')
+    events=artifacts['host_events'].get('events')
+    if not isinstance(events,list): fail('data_readiness_review.host_events','raw ordered host dispatch/completion events required')
+    dispatch=[e for e in events if e.get('event_type')=='agent_dispatched' and e.get('call_id')==receipt['host_dispatch_ref']]
+    completed=[e for e in events if e.get('event_type')=='agent_completed' and e.get('call_id')==receipt['host_dispatch_ref']]
+    if len(dispatch)!=1 or len(completed)!=1: fail('data_readiness_review.host_events','exact Reviewer dispatch and completion required')
+    for event in dispatch+completed:
+        if event.get('agent_session_id')!=session or event.get('task_sha256')!=review['reviewer_task_sha256']:
+            fail('data_readiness_review.host_events','host event session and Task must match receipt')
+    try:
+        prepared=datetime.fromisoformat(failure['completed_at'].replace('Z','+00:00'))
+        started=datetime.fromisoformat(dispatch[0]['at'].replace('Z','+00:00'))
+        finished=datetime.fromisoformat(completed[0]['at'].replace('Z','+00:00'))
+    except (KeyError,TypeError,ValueError): fail('data_readiness_review.host_events','valid preparation/dispatch/completion timestamps required')
+    if any(t.tzinfo is None for t in (prepared,started,finished)):
+        fail('data_readiness_review.host_events','timezone-aware timestamps required')
+    if events.index(dispatch[0])>=events.index(completed[0]) or not prepared<=started<finished:
+        fail('data_readiness_review.host_events','Reviewer must be dispatched after preparation and complete after dispatch')
+    return review
+
 def validate(v):
     for k in ['defect_id','source_cases','source_batch','reviewer_confirmed','duplicate_check','root_cause_group','payload','self_review','submission']:
         if k not in v: fail(k,'required')
@@ -150,6 +201,9 @@ def _validate_regression_runtime(regression,baseline_plan,run_dir):
         if entry.get('mode')!='product_regression' or task.get('operation_mode')!='product_regression': fail(p+'.task_ref','Runtime Task is not a product Regression')
         if task.get('regression_id')!=regression.get('regression_id') or task.get('bug_ref')!=regression.get('bug_ref'):
             fail(p+'.task_ref','Runtime Regression Task must bind the same Regression and Bug IDs')
+        for key in ['target_environment','deployment_version','deployment_event_ref','deployment_event_sha256']:
+            if task.get(key)!=regression.get(key) or entry.get(key)!=regression.get(key):
+                fail(p+'.'+key,'Task and completed Runtime history must bind the exact Regression deployment')
         if task.get('batch_id')!=bid: fail(p+'.task_ref','Runtime Regression Task Batch mismatch')
         if task.get('task_hash')!=__import__('batch_task_builder').task_hash(task): fail(p+'.task_ref','Runtime Regression Task Hash mismatch')
         result_path=(base/entry.get('results_ref','')).resolve()
@@ -161,6 +215,7 @@ def _validate_regression_runtime(regression,baseline_plan,run_dir):
         for result in results:
             cid=result.get('case_id')
             if cid not in plan_cases or plan_cases[cid].get('batch_id')!=bid: fail(p+'.results','Case must belong to this planned Batch')
+            runtime._validate_result_version(task,result)
             merged[cid]=result
         initial_task=json.loads((base/state['task_ref']).read_text(encoding='utf-8'))
         initial_results=json.loads((base/state['worker_results_ref']).read_text(encoding='utf-8'))
@@ -194,7 +249,11 @@ def _validate_regression_runtime(regression,baseline_plan,run_dir):
     return merged
 
 def validate_reg(v,baseline_plan,evidence_root=None):
-    for k in ['regression_id','bug_ref','original_case_ids','impact_case_ids','cases','status']:
+    for k in [
+        'regression_id','bug_ref','original_case_ids','impact_case_ids','cases','status',
+        'target_environment','deployment_version','deployment_event_ref',
+        'deployment_event_sha256','impact_analysis'
+    ]:
         if k not in v: fail(k,'required')
     if not v['original_case_ids']: fail('original_case_ids','non-empty required')
     cases=v['cases']
@@ -206,27 +265,63 @@ def validate_reg(v,baseline_plan,evidence_root=None):
     baseline=_baseline_case_map(baseline_plan)
     unknown=required_ids-set(baseline)
     if unknown: fail('cases',f'regression scope must come from confirmed execution plan: {sorted(unknown)}')
-    target_env = v.get('target_environment') or v.get('target_env')
+    target_env = v.get('target_environment')
+    if not isinstance(target_env,str) or not target_env.strip():
+        fail('target_environment','non-empty target_environment required')
     planned_env = baseline_plan.get('target_environment')
     if planned_env and isinstance(planned_env, dict):
         expected_env_id = planned_env.get('env_id')
-        if target_env and target_env != expected_env_id:
+        if target_env != expected_env_id:
             fail('target_environment', f'regression target_environment {target_env} does not match planned env {expected_env_id}')
     dep_version = v.get('deployment_version')
-    if dep_version is not None:
-        if not isinstance(dep_version, str) or not dep_version.strip():
-            fail('deployment_version', 'non-empty deployment_version required')
+    if not isinstance(dep_version, str) or not dep_version.strip():
+        fail('deployment_version', 'non-empty deployment_version required')
     dep_event = v.get('deployment_event_ref')
-    if dep_event is not None and not dep_event:
-        fail('deployment_event_ref', 'deployment_event_ref cannot be empty')
+    if not isinstance(dep_event,str) or not dep_event.strip():
+        fail('deployment_event_ref', 'non-empty deployment_event_ref required')
+    dep_sha=v.get('deployment_event_sha256')
+    if not isinstance(dep_sha,str) or len(dep_sha)!=64:
+        fail('deployment_event_sha256','64-character SHA-256 required')
     impact = v.get('impact_analysis')
-    if impact is not None:
-        if not isinstance(impact, dict):
-            fail('impact_analysis', 'impact_analysis must be an object')
-        if 'old_pass_retest_needed' in impact and not isinstance(impact['old_pass_retest_needed'], bool):
-            fail('impact_analysis.old_pass_retest_needed', 'boolean required')
-        if 'affected_pass_cases' in impact and not isinstance(impact['affected_pass_cases'], list):
-            fail('impact_analysis.affected_pass_cases', 'list of case IDs required')
+    if not isinstance(impact, dict):
+        fail('impact_analysis', 'impact_analysis must be an object')
+    required_impact={'old_pass_retest_needed','affected_pass_cases','data_recheck_needed','rationale'}
+    if set(impact)!=required_impact:
+        fail('impact_analysis',f'exact fields required: {sorted(required_impact)}')
+    if not isinstance(impact['old_pass_retest_needed'], bool):
+        fail('impact_analysis.old_pass_retest_needed', 'boolean required')
+    affected=impact['affected_pass_cases']
+    if not isinstance(affected,list) or any(not isinstance(cid,str) or not cid for cid in affected) or len(affected)!=len(set(affected)):
+        fail('impact_analysis.affected_pass_cases', 'unique list of Case IDs required')
+    scope_batches={baseline[cid].get('batch_id') for cid in required_ids}
+    projected_affected={cid for cid in affected if cid in baseline and baseline[cid].get('batch_id') in scope_batches}
+    if projected_affected!=set(v.get('impact_case_ids',[])):
+        fail('impact_analysis.affected_pass_cases','impact_case_ids must equal deployment impact projected onto the Regression Batches')
+    if not set(affected)<=set(baseline):
+        fail('impact_analysis.affected_pass_cases','affected Cases must belong to the confirmed plan')
+    if impact['old_pass_retest_needed'] != bool(affected):
+        fail('impact_analysis.old_pass_retest_needed','must be true exactly when affected_pass_cases is non-empty')
+    if not isinstance(impact['data_recheck_needed'],bool):
+        fail('impact_analysis.data_recheck_needed','boolean required')
+    if not isinstance(impact['rationale'],str) or not impact['rationale'].strip():
+        fail('impact_analysis.rationale','non-empty rationale required')
+    if not evidence_root:
+        fail('deployment_event_ref','Run directory required to verify deployment event')
+    base=Path(evidence_root).resolve(); event_path=(base/dep_event).resolve()
+    if not _inside(event_path,base/'internal/execution/deployments'):
+        fail('deployment_event_ref','must stay under internal/execution/deployments')
+    if not event_path.is_file():
+        fail('deployment_event_ref','deployment event file is missing')
+    if _sha256(event_path)!=dep_sha:
+        fail('deployment_event_sha256','does not match deployment event file')
+    try: event=json.loads(event_path.read_text(encoding='utf-8'))
+    except Exception as exc: fail('deployment_event_ref',f'invalid JSON: {exc}')
+    if event.get('target_env')!=target_env:
+        fail('deployment_event_ref','event target_env does not match Regression')
+    if event.get('deployment_version')!=dep_version:
+        fail('deployment_event_ref','event deployment_version does not match Regression')
+    if event.get('impact_decision')!=impact:
+        fail('deployment_event_ref','event impact_decision does not match Regression')
 
     # Regression is not allowed to redefine the original Case or primary execution method.
     for c in cases:
@@ -303,17 +398,8 @@ def apply_defect_to_ledger(run_dir,v):
     else:
         # data_readiness source_kind: cases are unexecuted / BLOCKED by data readiness failure
         runtime_cache = {}
-        data_review = v.get('data_readiness_review')
-        if not data_review and v.get('data_readiness_review_ref'):
-            rev_path = (Path(run_dir) / v['data_readiness_review_ref']).resolve()
-            if rev_path.is_file():
-                data_review = json.loads(rev_path.read_text(encoding='utf-8'))
-        if not isinstance(data_review, dict):
-            fail('data_readiness_review', 'independent Reviewer review artifact or receipt required for data readiness defect')
-        if data_review.get('status') != 'passed':
-            fail('data_readiness_review.status', 'must be passed by independent Reviewer')
-        if not data_review.get('reviewer_session_id'):
-            fail('data_readiness_review.reviewer_session_id', 'independent Reviewer session identity required')
+        if 'data_readiness_review' in v: fail('data_readiness_review','inline self-reported review is forbidden')
+        data_review=validate_data_readiness_review(run_dir,v.get('data_readiness_review_ref'),v['source_batch'],v['source_cases'])
 
         for cid in v['source_cases']:
             if cid not in rows: fail(f'case_result_ledger.{cid}','defect source case is not initialized in ledger')
@@ -326,6 +412,8 @@ def apply_defect_to_ledger(run_dir,v):
             item['final_result'] = 'BLOCKED'
             item['reviewer_confirmed'] = True
             item['data_readiness_review'] = data_review
+            item['data_readiness_review_ref'] = v['data_readiness_review_ref']
+            item['deployment_version'] = json.loads((Path(run_dir)/'internal/state/run-status.json').read_text(encoding='utf-8')).get('current_deployment_version') or plan['target_environment']['initial_deployment_version']
             item['blocked_reason'] = data_review.get('blocked_reason') or v['payload'].get('title')
             roots.append((Path(run_dir)/'evidence'/v['source_batch']).resolve())
 
@@ -391,7 +479,10 @@ def apply_regression_to_ledger(run_dir,v):
     out=validate_reg(v,baseline_plan=plan,evidence_root=run_dir)
     if out.get('regression_passed') is not True: fail('regression_passed',f'regression task scope not fully passed: {out.get("failed_scope_case_ids",[])}')
     path,ledger=_load_ledger(run_dir); rows=ledger.setdefault('cases',{}); result_by={r['case_id']:r for r in v['results']}; original=set(v['original_case_ids']); impact=set(v.get('impact_case_ids',[])); ts=_now()
-    regression_execution={k:v[k] for k in ['regression_id','bug_ref','original_case_ids','impact_case_ids','cases','results','runtime_evidence']}
+    regression_execution={k:v[k] for k in [
+        'regression_id','bug_ref','original_case_ids','impact_case_ids','cases','results','runtime_evidence',
+        'target_environment','deployment_version','deployment_event_ref','deployment_event_sha256','impact_analysis'
+    ]}
     regression_execution['status']='completed'
     # Historical FAIL and Bug link are facts from Runtime/Defect; Regression cannot manufacture them.
     for cid in original:
@@ -410,7 +501,7 @@ def apply_regression_to_ledger(run_dir,v):
     source_batches=set();
     for cid in original|impact:
         item=rows[cid]; source_batches.add(item.get('batch_id'))
-        hist=item.setdefault('regression_history',[]); hist.append({'regression_id':v['regression_id'],'bug_ref':v['bug_ref'],'result':result_by[cid],'at':ts,'scope':'original' if cid in original else 'impact'})
+        hist=item.setdefault('regression_history',[]); hist.append({'regression_id':v['regression_id'],'bug_ref':v['bug_ref'],'result':result_by[cid],'at':ts,'scope':'original' if cid in original else 'impact','target_environment':v['target_environment'],'deployment_version':v['deployment_version'],'deployment_event_ref':v['deployment_event_ref'],'deployment_event_sha256':v['deployment_event_sha256']})
         item['regression_id']=v['regression_id']; item['bug_ref']=v['bug_ref']; item['regression_result']=result_by[cid]; item['reviewer_confirmed']=True; item['updated_at']=ts
         item['regression_execution']=regression_execution
         if cid in original:
@@ -428,12 +519,21 @@ def apply_regression_to_ledger(run_dir,v):
 
 
 def apply_disposition_to_ledger(run_dir, disp):
-    for k in ['defect_id', 'disposition', 'operator', 'rationale', 'affected_case_ids']:
+    for k in ['defect_id', 'bug_ref', 'decision_source', 'disposition', 'operator', 'rationale', 'affected_case_ids']:
         if k not in disp: fail(k, 'required')
     if disp['disposition'] not in {'postponed', 'wontfix'}:
         fail('disposition', 'must be postponed or wontfix')
     path, ledger = _load_ledger(run_dir)
     rows = ledger.setdefault('cases', {})
+    for field in ['defect_id','bug_ref','decision_source','operator','rationale']:
+        if not isinstance(disp[field],str) or not disp[field].strip(): fail(field,'non-empty string required')
+    linked={cid for cid,item in rows.items() if item.get('defect_id')==disp['defect_id'] and (item.get('bug_ref') or item.get('existing_bug_ref'))==disp['bug_ref']}
+    affected=disp['affected_case_ids']
+    if not isinstance(affected,list) or len(affected)!=len(set(affected)) or not linked or set(affected)!=linked:
+        fail('affected_case_ids','must exactly equal Cases linked to this defect_id and bug_ref')
+    for cid in affected:
+        if (rows[cid].get('final_result') or rows[cid].get('status')) not in {'FAIL','BLOCKED'}:
+            fail('affected_case_ids','disposition must preserve FAIL/BLOCKED facts')
     ts = _now()
     for cid in disp['affected_case_ids']:
         if cid not in rows: fail(f'case_result_ledger.{cid}', 'case not found in ledger')
@@ -442,6 +542,8 @@ def apply_disposition_to_ledger(run_dir, disp):
         item['disposition'] = disp['disposition']
         item['disposition_record'] = {
             'defect_id': disp['defect_id'],
+            'bug_ref': disp['bug_ref'],
+            'decision_source': disp['decision_source'],
             'disposition': disp['disposition'],
             'operator': disp['operator'],
             'rationale': disp['rationale'],
@@ -454,6 +556,8 @@ def apply_disposition_to_ledger(run_dir, disp):
     _dashboard(run_dir, {
         'type': 'defect_disposition_applied',
         'defect_id': disp['defect_id'],
+        'bug_ref': disp['bug_ref'],
+        'decision_source': disp['decision_source'],
         'disposition': disp['disposition'],
         'case_ids': disp['affected_case_ids'],
         'stage': 'defect-handling'

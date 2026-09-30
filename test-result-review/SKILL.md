@@ -255,3 +255,7 @@ Final Review 不相信最终摘要里的 `PASS` 字样。
 并重新调用 Runtime Contract 做 Expected → Actual → Evidence 校验。Evidence 文件已经丢失、Case 集不一致、Batch 未完成或 Regression 不完整时，不能关闭 Run。
 
 没有显式标记核心流程的简单项目，不会因为 `core_flow` 为空自动判定为“不建议进入下一阶段”；只有真实核心流程存在且失败时才影响该项判断。
+
+最终摘要每 Case 必须写实际 `target_environment`、`deployment_version`。Final Review 重开部署事件、原始部署证据及版本影响分析，生成 version_reconciliation；旧 PASS 不自动冒充最新版本验证。报告列出初测、每轮回归/恢复、每 Case 实际版本、未重测依据和 BLOCKED 未测范围。
+
+Router 的 `set-final-review` 只在 result-review 阶段运行，重新校验后生成 `deliverables/test-report.md` 并绑定哈希；关闭前再次重开 Final Review 和报告，拒绝待回归/待恢复/待复核项。独立渲染命令为 `python scripts/report.py --input <review.json> --run-dir <Run> --output <Run>/deliverables/test-report.md`，不能绕过对账直接信任手填 conclusion，也不能覆盖已关闭 Run。

@@ -14,6 +14,10 @@ HOST_DISPATCH_SOURCES={'codex_subagent_tool','claude_task_tool','antigravity_sub
 
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 
+def _inside(path,root):
+    try: Path(path).resolve().relative_to(Path(root).resolve()); return True
+    except ValueError: return False
+
 def _load_module(path,name):
     spec=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m
 
@@ -73,10 +77,18 @@ def _validate_result_set(task,results,path='worker_results',evidence_root=None):
     planned={c['case_id']:c for c in task['cases']}; actual=_index_results(results,path)
     if set(planned)!=set(actual): fail(path,f'result case set must equal task case set; missing={sorted(set(planned)-set(actual))}, extra={sorted(set(actual)-set(planned))}')
     for cid in task['case_order']:
+        _validate_result_version(task,actual[cid])
         validate_case_result(planned[cid],actual[cid],evidence_root=evidence_root,
                               dependency_context=task.get('dependency_context',{}))
         _validate_dependencies(planned[cid],actual,task.get('dependency_context',{}))
     return [deepcopy(actual[cid]) for cid in task['case_order']]
+
+def _validate_result_version(task,result):
+    cid=result.get('case_id') or '<unknown>'
+    if result.get('target_environment')!=task.get('target_environment'):
+        fail(f'{cid}.target_environment','must equal the frozen Worker Task environment')
+    if result.get('deployment_version')!=task.get('deployment_version'):
+        fail(f'{cid}.deployment_version','must equal the frozen Worker Task deployment version')
 
 class RuntimeOrchestrator:
     def __init__(self,plan,batch_id,data_manifest,execution_context,case_result_ledger=None,run_dir=None):
@@ -147,6 +159,11 @@ def _validate_host_receipt(receipt,role,task,worker_session_id=None):
 
 def _case_artifact_manifest(base,task,results):
     root=_Path(base).resolve(); planned={c['case_id']:c for c in task['cases']}; manifest={}
+    if task.get('data_readiness_recovery'):
+        for ref in [task['data_manifest_ref']]+[row['prior_review_ref'] for row in task['data_readiness_recovery']]:
+            path=(root/ref).resolve()
+            if not _inside(path,root) or not path.is_file(): fail('data_readiness_recovery','missing current-Run preparation artifact')
+            manifest[ref]=_sha256(path)
     for result in results:
         cid=result['case_id']; refs=[]; run=result.get('automation_run') or {}; official=run.get('official_run') or {}
         refs.extend([run.get('script_ref'),official.get('report_ref'),result.get('recording_ref'),result.get('video_ref')])
@@ -154,6 +171,8 @@ def _case_artifact_manifest(base,task,results):
             for ref in row.get('evidence_refs',row.get('evidence',[])) or []:
                 refs.append(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)
         for ref in result.get('evidence_refs',[]) or []: refs.append(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)
+        for invocation in result.get('jev_invocations',[]) or []:
+            refs.extend(value for key,value in invocation.items() if key.endswith('_ref') and isinstance(value,str))
         for ref in refs:
             if not ref: continue
             path=_Path(ref); path=(path if path.is_absolute() else root/path).resolve()
@@ -234,6 +253,8 @@ def _validate_worker_recovery_history(base,history,task=None,batch_id=None):
 
 def _validate_frozen_artifacts(base,reviewer_task,task,results):
     _validate_artifact_snapshot(base,reviewer_task)
+    if reviewer_task.get('data_readiness_recovery',[])!=task.get('data_readiness_recovery',[]):
+        fail('reviewer_task.data_readiness_recovery','must match frozen preparation recovery binding')
     if reviewer_task.get('dependency_context',{})!=task.get('dependency_context',{}):
         fail('reviewer_task.dependency_context','must exactly match the frozen Runtime Worker Task dependency context')
     recovery=reviewer_task.get('worker_recovery_history',[])
@@ -247,6 +268,7 @@ def _validate_frozen_artifacts(base,reviewer_task,task,results):
 def validate_result_from_snapshot(base,reviewer_task,plan_case,result):
     """Validate a historical result against its immutable reviewer-input artifacts."""
     _validate_artifact_snapshot(base,reviewer_task)
+    _validate_result_version(reviewer_task,result)
     with tempfile.TemporaryDirectory(prefix='test-run-artifact-snapshot-') as temp_dir:
         root=_Path(temp_dir)
         for source_ref,item in reviewer_task['artifact_snapshot_manifest'].items():
@@ -266,6 +288,9 @@ def _build_reviewer_task(base,batch_id,task,task_ref,results_ref,self_review_ref
         'task_id':f'{batch_id}-reviewer-{sequence:03d}',
         'agent_role':'result_reviewer',
         'batch_id':batch_id,
+        'target_environment':task['target_environment'],
+        'deployment_version':task['deployment_version'],
+        'data_readiness_recovery':deepcopy(task.get('data_readiness_recovery',[])),
         'case_order':list(task['case_order']),
         'worker_task_id':task['task_id'],
         'worker_task_hash':task['task_hash'],
@@ -457,6 +482,12 @@ def _commit_results_to_ledger(base,task,results,source='batch_review'):
         cid=r['case_id']; st=r.get('final_result') or r.get('status')
         if st not in {'PASS','FAIL','BLOCKED','PASS_AFTER_FIX'}: fail(f'case_result_ledger.{cid}.status',f'cannot commit non-final status {st}')
         current=rows.setdefault(cid,{'case_id':cid,'batch_id':planned.get(cid,{}).get('batch_id') or task.get('batch_id')})
+        if current.get('source_kind')=='data_readiness':
+            recovery=next((x for x in task.get('data_readiness_recovery',[]) if cid in x['case_ids']),None)
+            if not recovery: fail(f'case_result_ledger.{cid}','preparation BLOCKED requires explicit frozen recovery binding')
+            current.setdefault('preparation_history',[]).append({'status':'BLOCKED','review':deepcopy(current['data_readiness_review']),'review_ref':current['data_readiness_review_ref'],'bug_ref':current.get('bug_ref'),'deployment_version':current.get('deployment_version'),'recovery':deepcopy(recovery)})
+            current.pop('source_kind',None)
+            current.pop('blocked_reason',None)
         if st in {'FAIL','BLOCKED'} and not current.get('initial_result'): current['initial_result']=st
         if source=='unblocked_cases_reviewer_passed':
             if (current.get('final_result') or current.get('status'))!='BLOCKED' or not isinstance(current.get('runtime_result'),dict) or current['runtime_result'].get('status')!='BLOCKED':
@@ -535,6 +566,7 @@ def finish_case_files(run_dir,batch_id,result_path,retest=False):
     for key,expected in [('agent_session_id',receipt.get('agent_session_id')),('task_id',task.get('task_id')),('task_hash',task.get('task_hash'))]:
         result_key='agent_session_id' if key=='agent_session_id' else key
         if result.get(result_key)!=expected: fail(f'{cid}.{result_key}',f'must bind to dispatched Worker and frozen Task')
+    _validate_result_version(task,result)
     validate_case_result(planned[cid],result,evidence_root=base,
                          dependency_context=task.get('dependency_context',{}))
     actual={k:deepcopy(v) for k,v in partial.items()}; actual[cid]=deepcopy(result)
@@ -554,6 +586,47 @@ def finish_case_files(run_dir,batch_id,result_path,retest=False):
     _write_json(sp,state)
     return state
 
+def _bind_latest_deployment(base,task):
+    """Freeze a newly dispatched Task to the current verified deployment, not the old plan version."""
+    state=_read_json(_Path(base)/'internal/state/run-status.json')
+    event=state.get('last_deployment_event')
+    if event:
+        path=(_Path(base)/event.get('event_ref','')).resolve()
+        if not _inside(path,_Path(base)/'internal/execution/deployments') or not path.is_file() or _sha256(path)!=event.get('event_sha256'):
+            fail('deployment_event','latest deployment event is missing or changed')
+        payload=_read_json(path)
+        if payload!={k:v for k,v in event.items() if k not in {'event_ref','event_sha256'}}:
+            fail('deployment_event','Run state must match the immutable deployment event')
+        if event.get('target_env')!=task.get('target_environment'):
+            fail('deployment_event.target_env','must match the planned execution environment')
+        task.update(deployment_version=event['deployment_version'],deployment_event_ref=event['event_ref'],deployment_event_sha256=event['event_sha256'],impact_analysis=deepcopy(event['impact_decision']))
+    seal_task(task); validate_task(task)
+    return task
+
+def _bind_preparation_recovery(base,task,ledger):
+    rows=ledger.get('cases',{}); blocked=[rows[cid] for cid in task['case_order'] if rows.get(cid,{}).get('source_kind')=='data_readiness']
+    if not blocked: return
+    if not task.get('deployment_event_ref'): fail('data_readiness_recovery','verified fix deployment is required before first Runtime')
+    manifest=_read_json(_Path(base)/task['data_manifest_ref'])
+    if manifest.get('applicable_version')!=task['deployment_version']: fail('data_readiness_recovery','new data readback must bind the fix deployment')
+    mod=_load_module(_Path(__file__).resolve().parents[2]/'test-defect-handling/scripts/defect_contract.py','preparation_recovery_contract')
+    recovery=[]; seen=set()
+    for row in blocked:
+        ref=row.get('data_readiness_review_ref'); prior=row['data_readiness_review']
+        if row.get('deployment_version')==task['deployment_version']: fail('data_readiness_recovery','fix deployment must differ from blocked preparation version')
+        if ref in seen: continue
+        seen.add(ref)
+        raw=mod.validate_data_readiness_review(base,ref,task['batch_id'],prior['affected_case_ids'])
+        if raw!=prior: fail('data_readiness_recovery','prior review differs from preserved ledger')
+        recovery.append({'case_ids':prior['affected_case_ids'],'bug_ref':row.get('bug_ref'),'prior_review_ref':ref,'prior_review_sha256':_sha256(_Path(base)/ref),'data_manifest_ref':task['data_manifest_ref'],'data_manifest_sha256':_sha256(_Path(base)/task['data_manifest_ref']),'deployment_event_ref':task['deployment_event_ref'],'deployment_event_sha256':task['deployment_event_sha256'],'deployment_version':task['deployment_version']})
+    task['data_readiness_recovery']=recovery; seal_task(task); validate_task(task)
+
+def _emit_preparation_recovery_verified(base,task,results):
+    by={r['case_id']:r for r in results}
+    for recovery in task.get('data_readiness_recovery',[]):
+        if all(by.get(cid,{}).get('status')=='PASS' for cid in recovery['case_ids']):
+            _emit_dashboard(base,{'type':'data_preparation_fix_verified','batch_id':task['batch_id'],'bug_ref':recovery['bug_ref'],'case_ids':recovery['case_ids'],'deployment_version':task['deployment_version']})
+
 def prepare_run_files(plan_path,batch_id,manifest_path,context_path,run_dir):
     base=_Path(run_dir); _assert_confirmed_plan_binding(base,plan_path); _assert_bound_batch_data(base,batch_id,manifest_path,plan_path)
     plan=_read_json(plan_path); manifest=_read_json(manifest_path); context=_read_json(context_path)
@@ -563,7 +636,7 @@ def prepare_run_files(plan_path,batch_id,manifest_path,context_path,run_dir):
     if state_path.exists(): fail('runtime_state','Batch Runtime is already initialized; resume its current state instead of preparing over its history')
     state={'batch_id':batch_id,'status':'waiting_for_worker' if pre['status']=='ready' else ('blocked' if pre['status']=='blocked' else 'return_upstream'),'precheck':pre,'task_ref':None,'worker_results_ref':None,'worker_self_review_ref':None,'worker_self_review':None,'worker_dispatch_receipt':None,'reviewer_task_ref':None,'reviewer_dispatch_receipt':None,'reviewer':None,'review_history':[],'retest_history':[],'retest_tasks':[],'active_retest':None,'partial_case_results':{},'current_case':None,'current_worker':None,'case_result_ledger_ref':CASE_LEDGER_REL}
     if pre['status']=='ready':
-        task=build_task(plan,batch_id,'internal/execution/execution-context.yaml',f'internal/data/manifests/{batch_id}-data-manifest.json',case_result_ledger=final_results); task_path=base/f'internal/execution/tasks/{batch_id}-task.json'; _write_json(task_path,task); state['task_ref']=str(task_path.relative_to(base))
+        task=build_task(plan,batch_id,'internal/execution/execution-context.yaml',f'internal/data/manifests/{batch_id}-data-manifest.json',case_result_ledger=final_results); _bind_latest_deployment(base,task); _bind_preparation_recovery(base,task,ledger); task_path=base/f'internal/execution/tasks/{batch_id}-task.json'; _write_json(task_path,task); state['task_ref']=str(task_path.relative_to(base))
         dispatch=_dispatch_dir(base); _write_json(dispatch/f'{batch_id}-worker-task.json',task)
         _emit_dashboard(base,{'type':'batch_started','batch_id':batch_id,'worker_id':None,'current_action':'dispatch_execution_worker'})
     _write_json(state_path,state); return state
@@ -745,7 +818,7 @@ def prepare_resumed_cases_files(run_dir,batch_id,case_ids,bug_ref=None):
             task.setdefault('dependency_context',{})[dep]=deepcopy(item)
     task['data_manifest_ref']=str(manifest_path.resolve().relative_to(base.resolve()))
     task['resume_reason']='unblocked_after_regression'; task['bug_ref']=bug_ref or pending.get('bug_ref')
-    seal_task(task); validate_task(task)
+    _bind_latest_deployment(base,task)
     rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,task); rel=str(rp.relative_to(base))
     state.setdefault('retest_tasks',[]).append(rel)
     state['active_retest']={'mode':'resume_after_regression','task_ref':rel,'sequence':seq,'results_ref':None,'self_review':None,'reviewer':None,'partial_case_results':{},'current_case':None,'current_worker':None,'bug_ref':task.get('bug_ref')}
@@ -756,6 +829,15 @@ def prepare_resumed_cases_files(run_dir,batch_id,case_ids,bug_ref=None):
 def prepare_product_regression_files(run_dir,batch_id,bug_ref,case_ids,regression_id=None):
     base=_Path(run_dir); rs=_read_json(base/'internal/state/run-status.json')
     if rs.get('current_stage')!='defect-handling': fail('regression.stage','product Regression can only start in defect-handling')
+    deployment=rs.get('last_deployment_event')
+    if not isinstance(deployment,dict): fail('regression.deployment','verified deployment event is required before Regression')
+    for field in ['event_id','event_ref','event_sha256','target_env','deployment_version','impact_decision']:
+        if not deployment.get(field): fail(f'regression.deployment.{field}','required')
+    event_path=(base/deployment['event_ref']).resolve()
+    if not _inside(event_path,base/'internal/execution/deployments') or not event_path.is_file():
+        fail('regression.deployment.event_ref','must be a real current-Run deployment event')
+    if _sha256(event_path)!=deployment['event_sha256']:
+        fail('regression.deployment.event_sha256','deployment event changed after verification')
     dashboard=_read_json(base/'dashboard/dashboard-data.json'); defect=next((d for d in dashboard.get('defects',[]) if d.get('id')==bug_ref),None)
     if not defect or defect.get('status')!='pending_regression': fail('regression.bug_ref','Bug must be marked pending_regression before Worker dispatch')
     sp=base/f'internal/execution/runtime-state/{batch_id}-state.json'; state=_read_json(sp)
@@ -773,18 +855,34 @@ def prepare_product_regression_files(run_dir,batch_id,bug_ref,case_ids,regressio
         if not item or item.get('reviewer_confirmed') is not True: fail(f'regression.{cid}','every Regression Case must have a Reviewer-confirmed baseline')
         if cid in originals and item.get('bug_ref')!=bug_ref and item.get('existing_bug_ref')!=bug_ref: fail(f'regression.{cid}.bug_ref','must match the Bug linked to the original FAIL')
     original_task=_read_task(base,state['task_ref']); original_results=_read_json(base/(state.get('final_results_ref') or state['worker_results_ref']))
+    batch_case_ids={c.get('case_id') for c in original_task.get('cases',[]) if isinstance(c,dict)}
+    affected_for_batch=set(deployment['impact_decision'].get('affected_pass_cases',[])) & batch_case_ids
+    impact_ids=set(wanted)-originals
+    if impact_ids!=affected_for_batch:
+        fail('regression.case_ids','impact scope must exactly equal the verified deployment impact analysis for this Batch')
+    if deployment['impact_decision'].get('data_recheck_needed'):
+        binding=rs.get('batch_data_bindings',{}).get(batch_id,{})
+        if binding.get('deployment_event_sha256')!=deployment['event_sha256']:
+            fail('regression.data_recheck','Batch data must be revalidated and rebound to the current deployment event')
     seq=len(state.get('retest_tasks',[]))+1; regression_id=regression_id or f'{batch_id}-regression-{seq:03d}'
     if not isinstance(regression_id,str) or not regression_id.strip() or any(c in regression_id for c in '/\\'):
         fail('regression.regression_id','must be a non-empty Run-local identifier')
     task=build_retest(original_task,wanted,seq,original_results)
-    task.update({'operation_mode':'product_regression','regression_id':regression_id,'bug_ref':bug_ref})
+    deployment_binding={
+        'target_environment':deployment['target_env'],
+        'deployment_version':deployment['deployment_version'],
+        'deployment_event_ref':deployment['event_ref'],
+        'deployment_event_sha256':deployment['event_sha256'],
+        'impact_analysis':deepcopy(deployment['impact_decision'])
+    }
+    task.update({'operation_mode':'product_regression','regression_id':regression_id,'bug_ref':bug_ref,**deployment_binding})
     seal_task(task); validate_task(task)
     task_path=base/f'internal/execution/tasks/{batch_id}-{regression_id}-task.json'; _write_json(task_path,task); rel=str(task_path.relative_to(base))
     state.setdefault('retest_tasks',[]).append(rel)
-    state['active_retest']={'mode':'product_regression','regression_id':regression_id,'bug_ref':bug_ref,'task_ref':rel,'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_case':None,'current_worker':None}
+    state['active_retest']={'mode':'product_regression','regression_id':regression_id,'bug_ref':bug_ref,**deployment_binding,'task_ref':rel,'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_case':None,'current_worker':None}
     state['status']='needs_rework'; _write_json(sp,state)
     dispatch=_dispatch_dir(base); _write_json(dispatch/f'{batch_id}-{regression_id}-worker-task.json',task)
-    return {'state':state,'regression_id':regression_id,'task_ref':rel,'case_ids':wanted}
+    return {'state':state,'regression_id':regression_id,'task_ref':rel,'case_ids':wanted,**deployment_binding}
 
 def accept_worker_results_files(run_dir,batch_id,results_path):
     fail('worker_results','direct Batch result submission is disabled; execute each Case through case-start -> case-finish so dashboard/recovery state stays canonical')
@@ -827,6 +925,7 @@ def accept_reviewer_files(run_dir,batch_id,review_path):
     unhandled_fail_case_ids=[]
     if review['status']=='passed':
         state['status']='completed'; _commit_results_to_ledger(base,task,results,'batch_reviewer_passed')
+        _emit_preparation_recovery_verified(base,task,results)
         unhandled_fail_case_ids=_unhandled_fail_case_ids(base,results)
     elif review['status']=='return_upstream': state['status']='return_upstream'; state['return_stage']=review['return_stage']
     else:
@@ -868,7 +967,8 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
     reviewer_receipt=deepcopy(reviewer_receipt); reviewer_receipt.update({'finished_at':datetime.now(timezone.utc).isoformat(),'receipt_status':'completed','result_status':review['status'],'outputs':{reviewer_output_ref:_sha256(review_path)}})
     ar['reviewer_dispatch_receipt']=reviewer_receipt
     _write_json(_dispatch_dir(base)/f'{batch_id}-reviewer-receipt-retest-{ar["sequence"]}.json',reviewer_receipt)
-    retest_record={'task_ref':ar['task_ref'],'results_ref':ar['results_ref'],'self_review_ref':ar.get('self_review_ref'),'reviewer_task_ref':ar['reviewer_task_ref'],'review':deepcopy(review),'worker_self_review':deepcopy(ar['self_review']),'worker_dispatch_receipt':deepcopy(ar['worker_dispatch_receipt']),'reviewer_dispatch_receipt':reviewer_receipt,'worker_recovery_history':deepcopy(ar.get('worker_recovery_history',[])),'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref')}
+    deployment_fields={k:deepcopy(ar.get(k)) for k in ['target_environment','deployment_version','deployment_event_ref','deployment_event_sha256','impact_analysis'] if k in ar}
+    retest_record={'task_ref':ar['task_ref'],'results_ref':ar['results_ref'],'self_review_ref':ar.get('self_review_ref'),'reviewer_task_ref':ar['reviewer_task_ref'],'review':deepcopy(review),'worker_self_review':deepcopy(ar['self_review']),'worker_dispatch_receipt':deepcopy(ar['worker_dispatch_receipt']),'reviewer_dispatch_receipt':reviewer_receipt,'worker_recovery_history':deepcopy(ar.get('worker_recovery_history',[])),'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),**deployment_fields}
     state.setdefault('retest_history',[]).append(retest_record)
     state.setdefault('review_history',[]).append({'type':'local_retest_review','review':deepcopy(review),'reviewer_task_hash':reviewer_task['task_hash']})
     if review['status']=='passed':
@@ -896,13 +996,15 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
             state['worker_self_review']=aggregate_worker; state['reviewer']=aggregate_reviewer
         state['status']='completed'; state['active_retest']=None
         if resume_mode: _commit_results_to_ledger(base,task,retest,'unblocked_cases_reviewer_passed')
-        elif not product_regression: _commit_results_to_ledger(base,task0,merged,'retest_reviewer_passed')
+        elif not product_regression:
+            _commit_results_to_ledger(base,task0,merged,'retest_reviewer_passed')
+            _emit_preparation_recovery_verified(base,task0,merged)
         unhandled_fail_case_ids=_unhandled_fail_case_ids(base,retest if product_regression else merged)
     elif review['status']=='return_upstream': state['status']='return_upstream'; state['return_stage']=review['return_stage']
     else:
         seq=len(state.get('retest_tasks',[]))+1; baseline_ref=state.get('final_results_ref') or state.get('product_regression_results_ref') or state['worker_results_ref']; rt=build_retest(_read_task(base,state['task_ref']),review['retest_case_ids'],seq,_read_json(base/baseline_ref))
-        if ar.get('mode')=='product_regression': rt.update({'operation_mode':'product_regression','regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref')}); __import__('batch_task_builder').seal_task(rt); validate_task(rt)
-        rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt); state['retest_tasks'].append(str(rp.relative_to(base))); state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_worker':None,'partial_case_results':{},'current_case':None,'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref')}; state['status']='needs_rework'
+        if ar.get('mode')=='product_regression': rt.update({'operation_mode':'product_regression','regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),**deployment_fields}); __import__('batch_task_builder').seal_task(rt); validate_task(rt)
+        rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt); state['retest_tasks'].append(str(rp.relative_to(base))); state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_worker':None,'current_case':None,'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),**deployment_fields}; state['status']='needs_rework'
     _write_json(sp,state); _emit_dashboard(base,{'type':'review_finished','batch_id':batch_id,'reviewer_id':reviewer_id,'reviewer_receipt_status':'completed','reviewer_result_status':review['status'],'status':review['status'],'retest_case_ids':review.get('retest_case_ids',[]),'return_stage':review.get('return_stage'),'unhandled_fail_case_ids':unhandled_fail_case_ids,'retest':True}); return state
 
 def _cli():

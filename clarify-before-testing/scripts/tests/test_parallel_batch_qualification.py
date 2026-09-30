@@ -15,6 +15,41 @@ def load_workflow():
     return module
 
 
+def _manifest(run_dir, batch_id, case_id):
+    directory = run_dir / 'evidence' / batch_id / case_id / 'account'
+    directory.mkdir(parents=True)
+    report = directory / 'runner-report.json'
+    report.write_text(json.dumps({'exit_code': 0}), encoding='utf-8')
+    evidence = directory / 'verification.json'
+    evidence.write_text(json.dumps({
+        'batch_id': batch_id, 'case_id': case_id, 'actor_ref': f'acct:{batch_id}',
+        'roles': ['tester'], 'permissions': [],
+        'authenticated': True, 'permissions_verified': True, 'secret_resolved': True,
+        'observed_via': 'node-native-fetch',
+        'runner_report_ref': report.relative_to(run_dir).as_posix(),
+        'runner_report_sha256': hashlib.sha256(report.read_bytes()).hexdigest(),
+    }), encoding='utf-8')
+    return {
+        'schema_version': 3, 'batch_id': batch_id, 'data_required': False,
+        'reason': 'Only runtime-generated data is planned', 'objects': [], 'builders': [],
+        'actor_bindings': [{
+            'actor_ref': f'acct:{batch_id}', 'secret_ref': 'env:TEST_TOKEN',
+            'roles': ['tester'], 'permissions': [],
+            'case_ids': [case_id], 'verified': True,
+            'verification_evidence_ref': evidence.relative_to(run_dir).as_posix(),
+            'verification_evidence_sha256': hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        }],
+    }
+
+
+def _add_data_requirements(plan):
+    plan['schema_version'] = 3
+    plan['data_requirements'] = [
+        {'scope': 'runtime_generated', 'object_type': 'receipt', 'case_ids': [case['case_id']], 'actor_role': 'tester', 'permission_requirements': []}
+        for case in plan['cases']
+    ]
+
+
 def test_router_requires_two_independently_bound_parallel_safe_batches(tmp_path, monkeypatch):
     workflow = load_workflow()
     run_dir = tmp_path / "work" / "test-runs" / "RUN-PARALLEL"
@@ -35,6 +70,7 @@ def test_router_requires_two_independently_bound_parallel_safe_batches(tmp_path,
             {"case_id": "C03", "batch_id": "B03", "dependencies": ["C01"], "data_required": False},
         ],
     }
+    _add_data_requirements(plan)
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     state = {
         "current_stage": "data-readiness",
@@ -52,9 +88,7 @@ def test_router_requires_two_independently_bound_parallel_safe_batches(tmp_path,
     for batch_id in ("B01", "B02"):
         manifest_path = manifest_dir / f"{batch_id}.json"
         manifest_path.write_text(
-            json.dumps({"batch_id": batch_id, "data_required": False,
-                        "reason": f"{batch_id} has no pre-execution data requirement",
-                        "objects": [], "builders": []}),
+            json.dumps(_manifest(run_dir, batch_id, f'C{batch_id[1:]}')),
             encoding="utf-8",
         )
         manifests[batch_id] = manifest_path
@@ -92,6 +126,7 @@ def test_router_does_not_add_unsafe_or_cross_batch_dependent_batch(tmp_path, mon
             {"case_id": "C03", "batch_id": "B03", "dependencies": [], "data_required": False},
         ],
     }
+    _add_data_requirements(plan)
     plan_path.write_text(json.dumps(plan), encoding="utf-8")
     state_path.parent.mkdir(parents=True)
     state_path.write_text(json.dumps({
@@ -105,11 +140,7 @@ def test_router_does_not_add_unsafe_or_cross_batch_dependent_batch(tmp_path, mon
     results = []
     for batch_id in ("B01", "B02", "B03"):
         manifest_path = manifest_dir / f"{batch_id}.json"
-        manifest_path.write_text(json.dumps({
-            "batch_id": batch_id, "data_required": False,
-            "reason": f"{batch_id} has no pre-execution data requirement",
-            "objects": [], "builders": [],
-        }), encoding="utf-8")
+        manifest_path.write_text(json.dumps(_manifest(run_dir, batch_id, f'C{batch_id[1:]}')), encoding="utf-8")
         results.append(workflow.set_batch_data_ready(state_path, batch_id, manifest_path))
 
     assert results[-1]["parallel_batch_ids"] == []

@@ -16,6 +16,7 @@ SPEC.loader.exec_module(batch_task_builder)
 def _plan(script_target):
     case_id = "TC-API-001"
     return {
+        "target_environment": {"env_id": "local-test", "initial_deployment_version": "fixture-v1"},
         "batches": [{"id": "B01", "case_ids": [case_id]}],
         "cases": [
             {

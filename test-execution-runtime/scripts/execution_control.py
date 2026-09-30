@@ -336,8 +336,8 @@ def _validate_jev_execution(plan_case, result, evidence_root):
         return
     mode = jev.get('mode', 'none')
     invocations = result.get('jev_invocations')
-    if invocations is None and isinstance(result.get('jev_invocation'), dict):
-        invocations = [result['jev_invocation']]
+    if 'jev_invocation' in result:
+        fail(f'{cid}.jev_invocation','legacy singular field is forbidden; use jev_invocations')
 
     if mode == 'none':
         if invocations:
@@ -345,6 +345,9 @@ def _validate_jev_execution(plan_case, result, evidence_root):
         return
 
     if mode == 'required':
+        if result.get('status')=='BLOCKED' and result.get('target_action_executed') is False and _actual(result) in (None,'NOT_EXECUTED') and not invocations:
+            if not result.get('jev_skipped_reason'): fail(f'{cid}.jev_skipped_reason','unexecuted BLOCKED must explain why planned Jev steps were not reached')
+            return
         if not isinstance(invocations, list) or len(invocations) == 0:
             if result.get('status') == 'PASS':
                 fail(f'{cid}.status', 'PASS forbidden: planned required Jev invocation was not performed')
@@ -360,6 +363,10 @@ def _validate_jev_execution(plan_case, result, evidence_root):
     total_cost = 0.0
     planned_tt = jev.get('target_type')
     planned_eids = set(jev.get('expected_ids', []))
+    if len(invocations or [])>jev.get('max_calls',0):
+        fail(f'{cid}.jev_invocations',f'call count exceeds planned max_calls={jev.get("max_calls")}')
+    policy_hash=hashlib.sha256(json.dumps(jev,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')).hexdigest()
+    case_root=_allowed_case_root(plan_case,evidence_root) if invocations else None
     for idx, inv in enumerate(invocations or []):
         p = f'{cid}.jev_invocations[{idx}]'
         if not isinstance(inv, dict):
@@ -367,24 +374,49 @@ def _validate_jev_execution(plan_case, result, evidence_root):
         tt = inv.get('target_type')
         if planned_tt and tt and tt != planned_tt:
             fail(f'{p}.target_type', f'mismatch with planned target_type {planned_tt}, got {tt}')
-        req_hash = inv.get('request_sha256')
-        res_hash = inv.get('response_sha256')
-        if not isinstance(req_hash, str) or len(req_hash) != 64:
-            fail(f'{p}.request_sha256', 'valid 64-char sha256 hash required')
-        if not isinstance(res_hash, str) or len(res_hash) != 64:
-            fail(f'{p}.response_sha256', 'valid 64-char sha256 hash required')
-        cost = inv.get('cost_usd', inv.get('estimated_cost_usd', 0.0))
-        if type(cost) not in (int, float) or cost < 0:
+        if inv.get('provider')!=jev.get('provider') or inv.get('model')!=jev.get('model') or inv.get('model_version')!=jev.get('model_version'):
+            fail(p+'.provider/model','must match the confirmed Planning provider, model, and model_version')
+        if inv.get('policy_sha256')!=policy_hash: fail(p+'.policy_sha256','must bind the exact confirmed Jev policy')
+        cost = inv.get('cost_usd')
+        if type(cost) not in (int, float) or not __import__('math').isfinite(cost) or cost < 0:
             fail(f'{p}.cost_usd', 'non-negative number required')
         total_cost += float(cost)
+        if total_cost>jev.get('max_cost_usd',0):
+            fail(f'{cid}.jev_invocations',f'total Jev cost exceeds planned max_cost_usd ${jev.get("max_cost_usd"):.4f}')
+        if cost>jev.get('max_cost_per_call_usd',0): fail(p+'.cost_usd','exceeds planned per-call cost cap')
         conf = inv.get('confidence')
         if type(conf) not in (int, float) or not (0.0 <= conf <= 1.0):
             fail(f'{p}.confidence', f'confidence must be a number between 0.0 and 1.0, got {conf}')
         eid = inv.get('expected_id')
-        if planned_eids and eid and eid not in planned_eids:
+        if eid not in planned_eids:
             fail(f'{p}.expected_id', f'must map to planned expected_ids {sorted(planned_eids)}, got {eid}')
+        selected=inv.get('selected_option') if planned_tt=='api_semantic_judgment' else inv.get('selected_id')
+        if selected not in jev.get('bounded_options',[]): fail(p+'.selected_option','must be one of the bounded Planning options')
+        required=('request','response','usage','source_response') if planned_tt=='api_semantic_judgment' else ('request','response','usage','candidate_snapshot','post_selection_revalidation')
+        for name in required:
+            ref=inv.get(name+'_ref'); digest=inv.get(name+'_sha256')
+            file_path=_safe_run_file(ref,p+'.'+name+'_ref',evidence_root,case_root)
+            actual=hashlib.sha256(file_path.read_bytes()).hexdigest()
+            if not isinstance(digest,str) or not re.fullmatch(r'[0-9a-f]{64}',digest) or digest!=actual:
+                fail(p+'.'+name+'_sha256',f'must match {name} evidence file')
+            if file_path.suffix.lower()=='.json':
+                try: payload=json.loads(file_path.read_text(encoding='utf-8'))
+                except (OSError,ValueError) as exc: fail(p+'.'+name+'_ref',f'invalid JSON evidence: {exc}')
+                _assert_secret_keys_redacted(payload,str(file_path))
+        request=json.loads(_safe_run_file(inv['request_ref'],p+'.request_ref',evidence_root,case_root).read_text(encoding='utf-8'))
+        if request.get('case_id')!=cid or request.get('expected_id')!=eid or request.get('target_type')!=planned_tt or request.get('policy_sha256')!=policy_hash:
+            fail(p+'.request_ref','request audit must bind Case, Expected, and target_type')
+        response=json.loads(_safe_run_file(inv['response_ref'],p+'.response_ref',evidence_root,case_root).read_text(encoding='utf-8'))
+        answer=(response.get('answers') or {}).get('judgment') or {}
+        if response.get('model')!=jev['model'] or answer.get('choice')!=selected or answer.get('confidence')!=conf:
+            fail(p+'.response_ref','saved official response must match pinned model, selected option and confidence')
+        usage=json.loads(_safe_run_file(inv['usage_ref'],p+'.usage_ref',evidence_root,case_root).read_text(encoding='utf-8'))
+        reported_cost=usage.get('costUsd',usage.get('cost_usd'))
+        if reported_cost!=cost: fail(p+'.usage_ref','invocation cost must match saved usage evidence')
     max_cost = jev.get('max_cost_usd')
-    if max_cost is not None and total_cost > max_cost:
+    if mode=='required' and {i.get('expected_id') for i in (invocations or []) if isinstance(i,dict)}!=planned_eids:
+        fail(f'{cid}.jev_invocations','required calls must cover every planned Expected ID')
+    if total_cost > max_cost:
         fail(f'{cid}.jev_invocations', f'total Jev cost ${total_cost:.4f} exceeds planned max_cost_usd ${max_cost:.4f}')
 
 

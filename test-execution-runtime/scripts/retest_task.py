@@ -18,6 +18,8 @@ def build(original_task,retest_case_ids,sequence=1,result_context=None):
         'schema_version': EXECUTION_SCHEMA_VERSION,
         'workflow_version': WORKFLOW_VERSION,
         'task_id':f'{bid}-retest-{sequence:03d}','batch_id':bid,'retest_of':bid,
+        'target_environment':original_task.get('target_environment'),
+        'deployment_version':original_task.get('deployment_version'),
         'parent_task_hash':original_task.get('task_hash') or task_hash(original_task),
         'case_order':[cid for cid in original_task['case_order'] if cid in wanted],'cases':cases,'dependency_context':dep_ctx,
         'execution_context_ref':original_task.get('execution_context_ref'),'data_manifest_ref':original_task.get('data_manifest_ref'),
@@ -25,6 +27,10 @@ def build(original_task,retest_case_ids,sequence=1,result_context=None):
         'allowed_adjustments':original_task.get('allowed_adjustments',[]),'forbidden_adjustments':original_task.get('forbidden_adjustments',[]),
         'output_paths':original_task.get('output_paths',{}),'status':'pending'
     }
+    for field in ('deployment_event_ref','deployment_event_sha256','impact_analysis'):
+        if field in original_task: task[field]=deepcopy(original_task[field])
+    recovery=[deepcopy(row) for row in original_task.get('data_readiness_recovery',[]) if wanted.intersection(row['case_ids'])]
+    if recovery: task['data_readiness_recovery']=recovery
     seal_task(task)
     validate(task)
     return task

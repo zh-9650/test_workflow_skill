@@ -69,6 +69,10 @@ def _defect_input():
 def _isolated_run(tmp_path):
     run_dir = tmp_path / "run"
     shutil.copytree(FIXTURE, run_dir)
+    # Build fresh synthetic v3 contracts; archived receipts remain untouched.
+    sys.path.insert(0,str(SCRIPT_DIR))
+    from synthetic_v3_fixture import build
+    build(run_dir)
 
     # The frozen plan itself stays byte-for-byte intact; only move the host-local
     # confirmation binding to the temporary copy, as required by the contract.

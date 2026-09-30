@@ -1,4 +1,5 @@
 import json
+import hashlib
 import importlib.util
 from pathlib import Path
 import pytest
@@ -101,3 +102,58 @@ def test_create_stage_snapshot(tmp_path):
     }), encoding="utf-8")
     with pytest.raises(AssertionError, match="output_path"):
         workflow_state.create_stage_snapshot(state_file, output_path=str(tmp_path / "escaped.json"))
+
+
+def _deployment_run(workflow_state, tmp_path):
+    run_dir = tmp_path / "work" / "test-runs" / "RUN-DEPLOY-001"
+    run_dir.mkdir(parents=True)
+    workflow_state.init(run_dir, "RUN-DEPLOY-001")
+    state_file = run_dir / "internal/state/run-status.json"
+    plan_path = run_dir / "internal/execution/execution-plan.json"
+    plan = {
+        "schema_version": 3,
+        "target_environment": {"env_id": "staging", "version": "v1.0.0"},
+        "cases": [{"case_id": "TC-001", "batch_id": "B01", "primary_execution": "API"}],
+    }
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    state["confirmation_bindings"]["execution-plan"] = {
+        "contract_path": str(plan_path.resolve()),
+        "contract_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+    }
+    state_file.write_text(json.dumps(state), encoding="utf-8")
+    evidence = run_dir / "evidence/deployment/staging-v1.0.1.json"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_text(json.dumps({"version": "v1.0.1", "env": "staging"}), encoding="utf-8")
+    impact = {
+        "old_pass_retest_needed": False,
+        "affected_pass_cases": [],
+        "data_recheck_needed": True,
+        "rationale": "Fix changes authentication data",
+    }
+    return run_dir, state_file, evidence, impact
+
+
+def test_record_deployment_requires_impact_analysis(tmp_path):
+    workflow_state = load_workflow()
+    _, state_file, evidence, _ = _deployment_run(workflow_state, tmp_path)
+    with pytest.raises(AssertionError, match="impact_decision"):
+        workflow_state.record_deployment_verified(
+            state_file, "staging", "v1.0.1", "http_health_endpoint", evidence
+        )
+
+
+def test_record_deployment_binds_plan_and_writes_immutable_event(tmp_path):
+    workflow_state = load_workflow()
+    run_dir, state_file, evidence, impact = _deployment_run(workflow_state, tmp_path)
+    with pytest.raises(AssertionError, match="planned env"):
+        workflow_state.record_deployment_verified(
+            state_file, "production", "v1.0.1", "http_health_endpoint", evidence, impact
+        )
+    event = workflow_state.record_deployment_verified(
+        state_file, "staging", "v1.0.1", "http_health_endpoint", evidence, impact
+    )
+    event_path = run_dir / event["event_ref"]
+    assert event_path.is_file()
+    assert hashlib.sha256(event_path.read_bytes()).hexdigest() == event["event_sha256"]
+    assert event["impact_decision"] == impact

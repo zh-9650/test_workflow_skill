@@ -63,6 +63,7 @@ def _validate_automation(c, main, batch_id, script_targets):
 
 
 def _validate_jev_policy(c, main, exp_ids):
+    import math
     cid = c['case_id']
     jev = c.get('jev_policy')
     if not isinstance(jev, dict):
@@ -75,8 +76,8 @@ def _validate_jev_policy(c, main, exp_ids):
     if main == '人工':
         fail(f'{cid}.jev_policy', 'manual Case cannot plan Jev invocation')
     tt = jev.get('target_type')
-    if main == 'UI' and tt not in {'ui_candidate_revalidation', 'ui_candidate_selection'}:
-        fail(f'{cid}.jev_policy.target_type', 'UI Case must use target_type=ui_candidate_revalidation or ui_candidate_selection')
+    if main == 'UI' and tt != 'ui_candidate_selection':
+        fail(f'{cid}.jev_policy.target_type', 'UI Case must use target_type=ui_candidate_selection')
     if main == 'API' and tt != 'api_semantic_judgment':
         fail(f'{cid}.jev_policy.target_type', 'API Case must use target_type=api_semantic_judgment')
     purpose = jev.get('purpose')
@@ -86,17 +87,36 @@ def _validate_jev_policy(c, main, exp_ids):
     if not isinstance(trigger, str) or not trigger.strip():
         fail(f'{cid}.jev_policy.trigger_condition', 'non-empty trigger_condition is required')
     options = jev.get('bounded_options')
-    if not isinstance(options, list) or len(options) < 1 or any(not isinstance(x, str) or not x.strip() for x in options):
-        fail(f'{cid}.jev_policy.bounded_options', 'non-empty list of string options required')
+    if not isinstance(options, list) or not 2 <= len(options) <= 255 or any(not isinstance(x, str) or not x.strip() for x in options) or len(set(options)) != len(options):
+        fail(f'{cid}.jev_policy.bounded_options', '2..255 unique non-empty string options required')
     fallback = jev.get('failure_fallback')
     if not isinstance(fallback, str) or not fallback.strip():
         fail(f'{cid}.jev_policy.failure_fallback', 'failure_fallback is required')
     if 'switch_provider' in fallback.lower() or 'laya' in fallback.lower():
         fail(f'{cid}.jev_policy.failure_fallback', 'switching provider is forbidden')
-    cost_cap = jev.get('max_cost_usd')
-    if cost_cap is not None:
-        if not isinstance(cost_cap, (int, float)) or cost_cap <= 0:
-            fail(f'{cid}.jev_policy.max_cost_usd', 'max_cost_usd must be a positive number when specified')
+    for key in ('max_cost_usd','max_cost_per_call_usd'):
+        value=jev.get(key)
+        if type(value) not in (int,float) or not math.isfinite(value) or value<=0:
+            fail(f'{cid}.jev_policy.{key}',f'{key} must be a positive number')
+    if jev['max_cost_per_call_usd']>jev['max_cost_usd']:
+        fail(f'{cid}.jev_policy.max_cost_per_call_usd','cannot exceed max_cost_usd')
+    for key in ('max_calls','max_input_chars'):
+        value=jev.get(key)
+        if type(value) is not int or value<=0:
+            fail(f'{cid}.jev_policy.{key}',f'{key} must be a positive integer')
+    if jev.get('provider')!='typesafe-official':
+        fail(f'{cid}.jev_policy.provider','must be typesafe-official')
+    for key in ('model','model_version'):
+        if not isinstance(jev.get(key),str) or not jev[key].strip():
+            fail(f'{cid}.jev_policy.{key}',f'non-empty {key} required')
+    if jev['model']!=f'jev-{jev["model_version"]}':
+        fail(f'{cid}.jev_policy.model','must match pinned official model_version as jev-<version>')
+    required_evidence=jev.get('required_evidence')
+    expected_evidence={'request','response','usage','reviewer_independent_judgment'}
+    if main=='API': expected_evidence.add('source_response')
+    else: expected_evidence.update({'candidate_snapshot','post_selection_revalidation'})
+    if not isinstance(required_evidence,list) or set(required_evidence)!=expected_evidence or len(required_evidence)!=len(expected_evidence):
+        fail(f'{cid}.jev_policy.required_evidence',f'must contain exactly {sorted(expected_evidence)}')
     e_ids = jev.get('expected_ids', [])
     if not isinstance(e_ids, list) or not e_ids or any(eid not in exp_ids for eid in e_ids):
         fail(f'{cid}.jev_policy.expected_ids', 'must map to valid Expected IDs in this Case')
@@ -137,20 +157,31 @@ def _validate_run_context(plan, cases, require_context=False):
             fail('defect_platform.credential_ref', 'must be a reference, not a plain secret value')
 
     dr = plan.get('data_requirements')
-    if dr is not None:
-        if not isinstance(dr, list):
-            fail('data_requirements', 'list required')
-        case_ids = {c['case_id'] for c in cases}
-        for i, item in enumerate(dr):
-            p = f'data_requirements[{i}]'
-            if not isinstance(item, dict): fail(p, 'object required')
-            if item.get('scope') not in {'base_resource', 'batch_dedicated', 'runtime_generated'}:
-                fail(p + '.scope', 'must be base_resource, batch_dedicated, or runtime_generated')
-            if not isinstance(item.get('object_type'), str) or not item['object_type'].strip():
-                fail(p + '.object_type', 'non-empty object_type required')
-            cids = item.get('case_ids', [])
-            if not isinstance(cids, list) or any(cid not in case_ids for cid in cids):
-                fail(p + '.case_ids', 'must map to cases in this plan')
+    if not isinstance(dr,list) or not dr:
+        fail('data_requirements','non-empty list required; every Case must declare prerequisite or runtime-generated data')
+    case_ids = {c['case_id'] for c in cases}
+    mapped=set()
+    timing_by_scope={'base_resource':'before_run','batch_dedicated':'before_batch','runtime_generated':'runtime'}
+    isolation_values={'project','run','batch','case'}
+    for i, item in enumerate(dr):
+        p = f'data_requirements[{i}]'
+        if not isinstance(item, dict): fail(p, 'object required')
+        scope=item.get('scope')
+        if scope not in timing_by_scope:
+            fail(p + '.scope', 'must be base_resource, batch_dedicated, or runtime_generated')
+        if not isinstance(item.get('object_type'), str) or not item['object_type'].strip():
+            fail(p + '.object_type', 'non-empty object_type required')
+        cids = item.get('case_ids', [])
+        if not isinstance(cids, list) or not cids or any(cid not in case_ids for cid in cids):
+            fail(p + '.case_ids', 'non-empty list mapping only to cases in this plan required')
+        if not isinstance(item.get('actor_role'),str) or not item['actor_role'].strip(): fail(p+'.actor_role','non-empty actor_role required')
+        perms=item.get('permission_requirements')
+        if not isinstance(perms,list) or any(not isinstance(x,str) or not x.strip() for x in perms): fail(p+'.permission_requirements','list of permission names required')
+        if item.get('creation_timing')!=timing_by_scope[scope]: fail(p+'.creation_timing',f'must be {timing_by_scope[scope]} for {scope}')
+        if item.get('isolation_scope') not in isolation_values: fail(p+'.isolation_scope',f'must be one of {sorted(isolation_values)}')
+        if not isinstance(item.get('source'),str) or not item['source'].strip(): fail(p+'.source','non-empty source required')
+        mapped.update(cids)
+    if mapped!=case_ids: fail('data_requirements.case_ids',f'every Case must be covered; missing={sorted(case_ids-mapped)}')
 
 
 def _confirmed_case_map(confirmed_cases):

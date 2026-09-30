@@ -422,17 +422,32 @@ Execution Plan V2 还必须包含以下机器字段：
   {
     "scope": "base_resource",
     "object_type": "user_account",
-    "case_ids": ["TC-001", "TC-002"]
+    "case_ids": ["TC-001", "TC-002"],
+    "actor_role": "tester",
+    "permission_requirements": ["read_account"],
+    "creation_timing": "before_run",
+    "isolation_scope": "project",
+    "source": "existing_account"
   },
   {
     "scope": "batch_dedicated",
     "object_type": "test_order",
-    "case_ids": ["TC-001"]
+    "case_ids": ["TC-001"],
+    "actor_role": "tester",
+    "permission_requirements": ["create_order"],
+    "creation_timing": "before_batch",
+    "isolation_scope": "batch",
+    "source": "legal_order_creation"
   },
   {
     "scope": "runtime_generated",
     "object_type": "payment_receipt",
-    "case_ids": ["TC-001"]
+    "case_ids": ["TC-001"],
+    "actor_role": "tester",
+    "permission_requirements": ["pay_order"],
+    "creation_timing": "runtime",
+    "isolation_scope": "case",
+    "source": "case_action"
   }
 ]
 ```
@@ -444,17 +459,24 @@ Execution Plan V2 还必须包含以下机器字段：
 {
   "jev_policy": {
     "mode": "conditional",
-    "target_type": "ui_candidate_revalidation",
+    "target_type": "ui_candidate_selection",
     "purpose": "复杂动态表格中重试候选行定位",
     "trigger_condition": "首选定位器未匹配到唯一元素",
     "bounded_options": ["row_selector_a", "row_selector_b", "row_selector_c"],
     "failure_fallback": "mark_step_fail_and_stop",
     "max_cost_usd": 0.05,
+    "max_cost_per_call_usd": 0.01,
+    "max_calls": 3,
+    "max_input_chars": 4096,
+    "provider": "typesafe-official",
+    "model": "jev-1.13.0",
+    "model_version": "1.13.0",
+    "required_evidence": ["request", "response", "usage", "candidate_snapshot", "post_selection_revalidation", "reviewer_independent_judgment"],
     "expected_ids": ["E1"]
   }
 }
 ```
-- `target_type`: UI Case 必须为 `ui_candidate_revalidation`，API Case 必须为 `api_semantic_judgment`。
+- `target_type`: UI Case 必须为 `ui_candidate_selection`，API Case 必须为 `api_semantic_judgment`。UI 选择后仍须重新读取页面并确定性校验同一候选。
 - 严禁供应商逃逸/回退 (`failure_fallback` 严禁包含切换提供商)。
-- 必须严格限制成本上限 (`max_cost_usd`) 和绑定 Expected IDs。
+- 固定提供商和版本，限制 Case 总预算、每次调用预算、调用次数及输入长度，逐项绑定 Expected IDs。API 的 required_evidence 用 `source_response` 替换两个 UI 专用项。
 - 实网 Jev 调用前必须经过用户显式授权。

@@ -73,6 +73,10 @@ def validate(task):
         fail('task_hash','does not match the canonical Worker Task payload')
     if not isinstance(task.get('batch_id'),str) or not task['batch_id']:
         fail('batch_id','non-empty string required')
+    if not isinstance(task.get('target_environment'),str) or not task['target_environment']:
+        fail('target_environment','frozen environment ID required')
+    if not isinstance(task.get('deployment_version'),str) or not task['deployment_version']:
+        fail('deployment_version','frozen deployment version required')
     order=task.get('case_order')
     cases=task.get('cases')
     if not isinstance(order,list) or not order or any(not isinstance(cid,str) or not cid for cid in order):
@@ -120,10 +124,13 @@ def build(plan,batch_id,execution_context_ref,data_manifest_ref,output_root='int
                 'final_result':item.get('final_result') if isinstance(item,dict) else None,
                 'reviewer_confirmed':item.get('reviewer_confirmed') if isinstance(item,dict) else None,
             }
+    environment=plan.get('target_environment') or {}
     task={
         'schema_version':EXECUTION_SCHEMA_VERSION,
         'workflow_version':WORKFLOW_VERSION,
         'batch_id':batch_id,
+        'target_environment':environment.get('env_id'),
+        'deployment_version':environment.get('initial_deployment_version'),
         'goal':b.get('goal') or b.get('name') or batch_id,
         'case_order':list(b['case_ids']),
         'cases':ordered,

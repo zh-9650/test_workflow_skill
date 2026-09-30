@@ -1,8 +1,8 @@
-"""Live end-to-end smoke execution test.
+"""Isolated live API/UI runner smoke, NOT real host Worker/Reviewer forward acceptance.
 
 Verifies REAL execution of TypeScript + Vitest (API) and TypeScript + Playwright Test (UI),
 including real pre-flight healthcheck, real browser launch, real screenshot (.png),
-and real recording (.webm), with no mocked results.
+and real recording (.webm), with no mocked runner results. Dispatch receipt is synthetic.
 """
 
 import hashlib
@@ -87,8 +87,7 @@ def test_live_smoke_api_and_ui():
         import uuid
         run_id = f"RUN-SMOKE-{uuid.uuid4().hex[:12]}"
         run_dir = FRESH_PROJECT / "work" / "test-runs" / run_id
-        if run_dir.exists():
-            shutil.rmtree(run_dir, ignore_errors=True)
+        assert not run_dir.exists(), 'Never overwrite an existing smoke Run'
 
         # Create Run structure
         for d in [
@@ -182,12 +181,14 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
             encoding="utf-8",
         )
 
-        # Create Task V2
+        # Create current-version Task
         task = {
-            "schema_version": 2,
+            "schema_version": 3,
             "workflow_version": "2.0.0",
             "task_id": "B01-live-task-001",
             "batch_id": "B01",
+            "target_environment": "local-smoke",
+            "deployment_version": "fixture-v1",
             "goal": "B01 Live Verification",
             "case_order": ["TC-API-001", "TC-UI-002"],
             "cases": [
@@ -249,8 +250,8 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
         task_path = run_dir / "internal/execution/tasks/B01-task.json"
         task_path.write_text(json.dumps(task, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # Worker receipt
-        worker_session_id = "worker-live-session-001"
+        # Synthetic scope binding only; this does not prove a host Agent was dispatched.
+        worker_session_id = "synthetic-runner-scope-001"
         receipt = {
             "agent_role": "execution_worker",
             "receipt_status": "dispatched",
@@ -258,7 +259,7 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
             "agent_session_id": worker_session_id,
             "task_id": task["task_id"],
             "task_hash": task_hash,
-            "host_dispatch_ref": "live-dispatch-ref",
+            "host_dispatch_ref": "synthetic-runner-scope-only",
             "dispatch_source": "codex_subagent_tool",
         }
         receipt_path = run_dir / "internal/execution/dispatch/B01-worker-receipt.json"
@@ -378,8 +379,10 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
         api_start = datetime.fromtimestamp(report_json["startTime"] / 1000 - 1, tz=timezone.utc).isoformat()
         api_finish = datetime.fromtimestamp(report_json["startTime"] / 1000 + 30, tz=timezone.utc).isoformat()
         api_result = {
-            "schema_version": 2,
+            "schema_version": 3,
             "case_id": "TC-API-001",
+            "target_environment": "local-smoke",
+            "deployment_version": "fixture-v1",
             "status": "PASS",
             "actual_execution": "API",
             "expected_results": [
@@ -415,8 +418,10 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
         ui_start = (pw_start_dt - timedelta(seconds=1)).isoformat()
         ui_finish = (pw_start_dt + timedelta(seconds=60)).isoformat()
         ui_result = {
-            "schema_version": 2,
+            "schema_version": 3,
             "case_id": "TC-UI-002",
+            "target_environment": "local-smoke",
+            "deployment_version": "fixture-v1",
             "status": "PASS",
             "actual_execution": "UI",
             "recording_ref": "evidence/B01/TC-UI-002/ui/TC-UI-002-recording.webm",
@@ -448,11 +453,11 @@ test(`${caseId}: increment once and verify the same value after browser reload`,
         res_check_ui = _ctl_mod.validate(task["cases"][1], ui_result, evidence_root=run_dir)
         assert res_check_ui["ok"] is True
         assert res_check_ui["status"] == "PASS"
+        (run_dir / 'internal/execution/results/isolated-runner-results.json').write_text(
+            json.dumps({'acceptance_level':'isolated_runner_smoke','host_dispatch_verified':False,'case_results':[api_result,ui_result]},ensure_ascii=False,indent=2),encoding='utf-8')
 
     finally:
-        # Clean up temporary run dir
-        if run_dir.exists():
-            shutil.rmtree(run_dir, ignore_errors=True)
+        # Preserve the unique ignored Run for inspection of script hashes, reports and raw evidence.
         if server_proc:
             server_proc.terminate()
             server_proc.wait()

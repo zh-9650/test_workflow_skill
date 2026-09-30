@@ -598,3 +598,11 @@ Runtime Contract 会在 Run 目录下实际检查：
 文件不存在时 Case 不能 PASS/FAIL 落账。
 
 Runtime 的文件化编排会自动更新 `dashboard/dashboard-data.json`：Batch 开始、Case 结果、Reviewer 开始/完成以及局部补测都会同步，不依赖 Agent 额外记住调用 Dashboard。独立的旧 `batch_result.py` 已删除，Batch 完成只允许通过 Runtime Orchestrator + Reviewer 链路。
+
+# 20. v3 版本、Jev 与准备恢复绑定
+
+冻结 Worker/Reviewer Task 和 Case Result 的 `target_environment`、`deployment_version`。新 Batch 与 BLOCKED 恢复使用当前部署事件，不能沿用 Planning 初版版本。产品回归先记录部署原始证据及显式影响分析，旧 PASS 的受影响集合按当前 Batch 投影；需要重验数据时走 Data Readiness 再返回 defect-handling。
+
+正式脚本通过框架 `jev-runtime.ts` 的 `judgeApiResponse` 或 `chooseUiCandidate` 调用。调用前必须有当前 Run 的 `internal/execution/jev-approval.json`，含 approved、user_decision_ref、plan_sha256、environment_id、每 Case policy_sha256、Run max_cost_usd，以及按 target_type 列出的 outbound_fields。无授权不发请求；费用缺失保持未知并阻止正式结果，不能填零。Run/Case 预算跨进程保守预留且失败不退回；UI 原快照最长 30 秒，重验快照必须在重验开始后采集，禁止未来时间、过期候选和目录链接。数据准备/上游导致未执行 BLOCKED 的 Case 不伪造 required 调用，保留 `jev_skipped_reason`。
+
+准备恢复 Task 带 `data_readiness_recovery` 时，Reviewer 输出 `data_readiness_recovery_reviews`：每项绑定 bug_ref、data_manifest_sha256、deployment_event_sha256、preparation_fixed=true、independent_judgment。只有所有源 Case 首次正式 PASS 且 Reviewer 复核通过，才发出 `data_preparation_fix_verified`，保留先前准备 BLOCKED 历史。

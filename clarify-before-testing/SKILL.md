@@ -210,21 +210,6 @@ work/test-runs/RUN-xxx/
 references/human-review-and-confirmation.md
 ```
 
-## 4.2 测试用例确认与中枢 Git 仓库同步（可选/推荐一键入库）
-
-测试用例（`full.md` + `smoke.md`）完成自审与人工确认后，即具备入库条件：
-- **用户口令响应**：当用户在对话中确认用例并表达“推到仓库”、“同步到 Git”、“用例上传”时，Router 优先调用同步脚本：
-  ```bash
-  python clarify-before-testing/scripts/sync_case_repo.py \
-    --module <模块英文名> \
-    --run-dir work/test-runs/RUN-xxx
-  ```
-- **自动化闭环**：脚本自动 pull 防冲突 → 覆盖写入 `ai-hub/projects/<项目>/test/cases/<模块>/` → 自动统计条数并更新 `test/README.md` 索引 → commit & push master → 输出文件查看直达链接。
-- **手动操作支持**：用户亦可手动将 `deliverables/full.md` 与 `smoke.md` 拖拽至对应仓库目录并手动 push，文件名完全一致无额外转译负担。
-- 入库完成后，无缝流入下一阶段 `execution-planning`。
-
----
-
 # 5. 后半程执行方案也必须确认
 
 测试用例确认后：

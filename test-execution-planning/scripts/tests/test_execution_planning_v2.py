@@ -58,7 +58,7 @@ def _sample_confirmed_cases():
 
 def _sample_valid_plan(confirmed_cases):
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "confirmed_case_ids": ["TC-API-001", "TC-UI-001"],
         "confirmed_cases_sha256": "dummy-hash",
         "self_review": {
@@ -90,7 +90,12 @@ def _sample_valid_plan(confirmed_cases):
             {
                 "scope": "base_resource",
                 "object_type": "user_account",
-                "case_ids": ["TC-API-001", "TC-UI-001"]
+                "case_ids": ["TC-API-001", "TC-UI-001"],
+                "actor_role": "tester",
+                "permission_requirements": ["login"],
+                "creation_timing": "before_run",
+                "isolation_scope": "run",
+                "source": "project_test_tenant"
             }
         ],
         "batches": [
@@ -144,6 +149,13 @@ def _sample_valid_plan(confirmed_cases):
                     "bounded_options": ["valid_validation_error", "internal_error"],
                     "failure_fallback": "mark_step_fail",
                     "max_cost_usd": 0.05,
+                    "max_cost_per_call_usd": 0.01,
+                    "max_calls": 1,
+                    "max_input_chars": 4096,
+                    "provider": "typesafe-official",
+                    "model": "jev-1.13.0",
+                    "model_version": "1.13.0",
+                    "required_evidence": ["request", "response", "source_response", "usage", "reviewer_independent_judgment"],
                     "expected_ids": ["E1"]
                 }
             },
@@ -241,13 +253,29 @@ def test_reject_unknown_expected_id_in_jev_policy():
         validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
 
 
-def test_ui_case_accepts_ui_candidate_revalidation():
+def test_ui_case_accepts_ui_candidate_selection():
     confirmed = _sample_confirmed_cases()
     plan = _sample_valid_plan(confirmed)
-    # UI case using ui_candidate_revalidation per SKILL.md:445
-    plan["cases"][1]["jev_policy"]["target_type"] = "ui_candidate_revalidation"
+    policy=dict(plan['cases'][0]['jev_policy'])
+    policy.update(target_type='ui_candidate_selection',expected_ids=['E2'],required_evidence=['request','response','usage','candidate_snapshot','post_selection_revalidation','reviewer_independent_judgment'])
+    plan['cases'][1]['jev_policy']=policy
     out = validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
     assert out["ok"] is True
+
+
+@pytest.mark.parametrize('value',[float('nan'),float('inf'),0,-1])
+def test_jev_budget_requires_finite_positive_value(value):
+    confirmed=_sample_confirmed_cases(); plan=_sample_valid_plan(confirmed)
+    plan['cases'][0]['jev_policy']['max_cost_usd']=value
+    with pytest.raises(AssertionError,match='max_cost_usd'):
+        validate(plan,require_confirmed=True,confirmed_cases=confirmed,require_context=True)
+
+
+def test_ui_rejects_obsolete_target_type():
+    confirmed=_sample_confirmed_cases(); plan=_sample_valid_plan(confirmed)
+    plan['cases'][1]['jev_policy']=dict(plan['cases'][0]['jev_policy'],target_type='ui_candidate_revalidation',expected_ids=['E2'])
+    with pytest.raises(AssertionError,match='target_type'):
+        validate(plan,require_confirmed=True,confirmed_cases=confirmed,require_context=True)
 
 
 def test_legacy_plan_without_context_rejected_by_default():
@@ -256,4 +284,40 @@ def test_legacy_plan_without_context_rejected_by_default():
     del plan["target_environment"]
     with pytest.raises(AssertionError, match="target_environment"):
         validate(plan, require_confirmed=True, confirmed_cases=confirmed)
+
+
+def test_schema_v2_is_rejected_without_compatibility_fallback():
+    confirmed = _sample_confirmed_cases()
+    plan = _sample_valid_plan(confirmed)
+    plan["schema_version"] = 2
+    with pytest.raises(AssertionError, match="schema_version"):
+        validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
+
+
+def test_missing_data_requirements_is_rejected():
+    confirmed = _sample_confirmed_cases()
+    plan = _sample_valid_plan(confirmed)
+    plan.pop("data_requirements")
+    with pytest.raises(AssertionError, match="data_requirements"):
+        validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
+
+
+def test_incomplete_data_requirement_is_rejected():
+    confirmed = _sample_confirmed_cases()
+    plan = _sample_valid_plan(confirmed)
+    plan["data_requirements"][0].pop("actor_role")
+    with pytest.raises(AssertionError, match="actor_role"):
+        validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ["max_cost_usd", "max_cost_per_call_usd", "max_calls", "max_input_chars", "provider", "model", "model_version", "required_evidence"],
+)
+def test_bounded_jev_policy_rejects_missing_runtime_limit_or_evidence(missing):
+    confirmed = _sample_confirmed_cases()
+    plan = _sample_valid_plan(confirmed)
+    plan["cases"][0]["jev_policy"].pop(missing)
+    with pytest.raises(AssertionError, match=missing):
+        validate(plan, require_confirmed=True, confirmed_cases=confirmed, require_context=True)
 

@@ -1,5 +1,6 @@
 import re
 import runpy
+from datetime import datetime
 from pathlib import Path
 
 
@@ -31,6 +32,28 @@ def _required_text(value, path):
 def _required_sha256(value, path):
     if not isinstance(value, str) or _SHA256.fullmatch(value) is None:
         fail(path, '64-character lowercase SHA-256 required')
+
+
+def validate_jev_independent_judgments(review, case_results):
+    invocations={(r['case_id'],i.get('expected_id'),i.get('source_response_sha256') or i.get('candidate_snapshot_sha256'))
+                 for r in (case_results or []) for i in r.get('jev_invocations',[])}
+    judgments=review.get('jev_independent_judgments',[])
+    if not isinstance(judgments,list): fail('reviewer.jev_independent_judgments','list required')
+    keys=[]
+    for row in judgments:
+        if not isinstance(row,dict): fail('reviewer.jev_independent_judgments','object required')
+        key=(row.get('case_id'),row.get('expected_id'),row.get('source_evidence_sha256'))
+        keys.append(key)
+        _required_text(row.get('independent_judgment'),'reviewer.jev_independent_judgments.independent_judgment')
+        _required_sha256(row.get('source_evidence_sha256'),'reviewer.jev_independent_judgments.source_evidence_sha256')
+        try:
+            first=datetime.fromisoformat(row['independent_judgment_at'].replace('Z','+00:00'))
+            second=datetime.fromisoformat(row['jev_record_reviewed_at'].replace('Z','+00:00'))
+        except (KeyError,TypeError,ValueError): fail('reviewer.jev_independent_judgments','valid ordered review timestamps required')
+        if first.tzinfo is None or second.tzinfo is None or first>=second:
+            fail('reviewer.jev_independent_judgments','independent source judgment must precede Jev record review')
+    if len(keys)!=len(set(keys)) or set(keys)!=invocations:
+        fail('reviewer.jev_independent_judgments','must cover exactly every invoked Case/Expected/source evidence')
 
 
 def validate(review, planned_case_ids, case_results=None, *, reviewer_task,
@@ -113,11 +136,13 @@ def validate(review, planned_case_ids, case_results=None, *, reviewer_task,
         for result in (case_results or [])
         if isinstance(result, dict)
     }
+    validate_jev_independent_judgments(review,case_results)
     needs_review = sorted(
         case_id for case_id in planned_case_ids
         if result_by.get(case_id, {}).get('status') == 'NEEDS_REVIEW'
     )
     if st == 'passed':
+        validate_preparation_recovery_reviews(review,reviewer_task)
         for key in MANDATORY:
             if checks.get(key) is not True:
                 fail(f'reviewer.checks.{key}', 'must be true when status=passed')
@@ -139,3 +164,12 @@ def validate(review, planned_case_ids, case_results=None, *, reviewer_task,
         if not review.get('findings'):
             fail('reviewer.findings', 'return_upstream needs findings')
     return {'ok': True, 'status': st}
+
+
+def validate_preparation_recovery_reviews(review,task):
+    required=task.get('data_readiness_recovery',[])
+    judgments=review.get('data_readiness_recovery_reviews',[])
+    if required:
+        expected={(r['bug_ref'],r['data_manifest_sha256'],r['deployment_event_sha256']) for r in required}
+        actual={(r.get('bug_ref'),r.get('data_manifest_sha256'),r.get('deployment_event_sha256')) for r in judgments if isinstance(r,dict) and r.get('preparation_fixed') is True and isinstance(r.get('independent_judgment'),str) and r['independent_judgment'].strip()}
+        if actual!=expected or len(judgments)!=len(required): fail('reviewer.data_readiness_recovery_reviews','must independently verify every preparation Bug against frozen manifest and fix deployment')

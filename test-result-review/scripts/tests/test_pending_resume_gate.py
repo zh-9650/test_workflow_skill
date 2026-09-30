@@ -51,6 +51,16 @@ def test_final_review_rejects_nonempty_pending_resume_in_isolated_run(tmp_path):
             ["B03"],
             "run_status.pending_resume_batches: Cases unblocked by regression still require data recheck, execution and Reviewer closure",
         ),
+        (
+            "open_defects",
+            [{"defect_id": "DEF-1", "bug_ref": "BUG-1"}],
+            "run_status.open_defects: unresolved defect actions prevent Final Review",
+        ),
+        (
+            "current_reviewer",
+            "reviewer-session-active",
+            "run_status.current_reviewer: active Reviewer work prevents Final Review",
+        ),
     ],
 )
 def test_final_review_cli_rejects_pending_resume_before_run_closure(

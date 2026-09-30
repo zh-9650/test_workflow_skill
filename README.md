@@ -1,5 +1,42 @@
 # 测试 Skill
 
+## 当前仓库修补检查点（2026-09-30）
+
+唯一验收依据仍是本地 `新版测试Skill改造计划.md`，该文件被 Git 忽略但真实存在。以下仅说明当前源码验证，不取代真实宿主前向验收或历史记录。
+
+本轮从 `8d5dfce687e281917f8329c9102e6d8d3edaf7df` 修补：执行契约升级 v3 并拒绝 v2；Planning 数据需求与 Data Manifest 逐项对账、账号/权限/秘密引用绑定；部署事件冻结并贯穿新 Batch、回归和 BLOCKED 恢复；用户延期/无需修复保留 FAIL/BLOCKED；数据准备 Bug 保留 BLOCKED 历史后首次执行；Jev 正式脚本调用封装、审批/外发字段/跨 Case 预算/原始证据/独立判断门禁；最终报告呈现各轮与实际验证版本，关闭前再次对账。删除了硬编码真实项目、关闭 TLS 验证并可推送远端的 `sync_case_repo.py`，可从 Git 恢复，未执行外部同步。
+
+### 实际验证与证据
+
+在仓库根目录运行：
+
+- `python -m pytest -q`：150 passed、2 skipped（Windows 符号链接权限 WinError 1314），包含真实本地 Vitest API / Playwright UI runner smoke。
+- `node --test test-project-bootstrap/scripts/tests/jev-adapter.test.mjs`：7 passed，全部 mock fetch，无付费请求。
+- 编译 framework 到临时目录后设置 `JEV_RUNTIME_MODULE=<编译输出>/jev-runtime.js`，运行 `node --test test-project-bootstrap/scripts/tests/jev-runtime.test.mjs`：4 passed，覆盖跨 Case Run 预算、外发字段、未知费用和 evidence junction 拒绝。
+- TypeScript `tsc --project <临时副本>/tsconfig.json --noEmit false --rootDir <临时副本>/framework --outDir <临时副本>/build`：exit 0。依赖复用 `.phase6-forward/fresh-project/work/test-automation/node_modules`，未下载或更改全局目录。临时目录：`C:/Users/17381/AppData/Local/Temp/skill-typecheck-f3720f9738c641079a50001d5e45ecd9`。
+- `git diff --check`：通过（只有 CRLF 转换提示）。
+- 对本轮修改的 5 个 SKILL.md 运行 `python -X utf8 <skill-creator>/scripts/quick_validate.py <Skill目录>`：全部 valid；不带 UTF-8 的初次调用遇到 GBK 解码错误，重试通过，未修改全局 Skill。
+
+本地 runner smoke 证据保留在 `.phase6-forward/fresh-project/work/test-runs/RUN-SMOKE-0e00c128880b/`：正式脚本 `scripts/api/B01/TC-API-001.test.ts`、`scripts/ui/B01/TC-UI-002.spec.ts`；`runner-results/` 原始 Runner 报告；`evidence/` 脱敏 HTTP 结果、刷新后截图、webm 录屏。该 Run 的派发 receipt 明确是合成 scope 输入，**不是宿主真实派发验收**。跨 Batch 账本测试也只在临时副本中生成 v3 合成契约，原始 Phase 5 历史夹具未改写。
+
+| Phase | 当前证实边界 |
+| --- | --- |
+| 0 | 已证实源码基线与 dirty 状态；未把未跟踪 zip 或被忽略计划归为本轮交付 |
+| 1 | Bootstrap 原有本地测试通过；多宿主真实发现/加载仍未验证 |
+| 2 | Planning v3 正反例通过；真实项目人工确认链仍未验证 |
+| 3 | 数据分类/账号/权限/证据契约通过；真实产品合法造数与准备 Bug 复验仍未验证 |
+| 4 | Runtime/Reviewer 契约与隔离 runner smoke 通过；真实宿主派发顺序未验收 |
+| 5 | Bug/跨 Batch 回归/处置/版本与准备恢复单元 seam 通过；完整准备 Bug 修复及多轮部署前向仍未验收 |
+| 6 | Final Review 门禁和版本报告单元测试通过；新 v3 Run 到唯一报告关闭的宿主前向仍未验收 |
+| 7 | 未授权同步，未操作全局 Skill 或真实业务项目 |
+| 8 | Jev 离线 mock/类型检查通过；实网费用核对、冻结标签集 shadow 指标、正式 Case 前向未验证 |
+
+### 尚需的前向验收
+
+运行新的隔离 v3 Run，真实主 Agent 派 Worker、等待完成及自审后再派新 Reviewer，保存宿主调用/任务/完成记录；覆盖数据准备产品 Bug、部署修复、数据重验、首次 Runtime、多 Batch 多轮回归、旧 PASS 影响、恢复 BLOCKED、新聊天恢复与最终报告关闭。Claude 等其他宿主只能由该宿主实际验收，不能用 Codex 或合成 JSON 替代。
+
+真实 Jev 请求仍须用户单独确认环境、外发字段、费用上限。官方响应没有可核对金额时，封装保存 usage 后拒绝生成正式调用结果，尚需真实账单证据核对路径，不能估零或凭连通性宣布通过。独立 Spec/Standards 审查发现的问题已作定向修补；最后一次新准备恢复分支的独立复审因 Agent 额度中断，不能写成复审全通过。
+
 这套 Skill 按已经确认的“前半程改造指导 + 后半程改造指导”实施，目标是让 AI 更接近真实资深测试人员的工作方式，而不是继续扩展工作流框架。
 
 ```text

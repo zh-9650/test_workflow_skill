@@ -80,7 +80,7 @@ Planning 必须确定：
 ## 8. 有界 Jev 策略
 
 对于需要大模型辅助的步骤或 Expected：
-- UI Case 仅允许 `ui_candidate_revalidation`（候选定位辅助），驱动仍为 Playwright；
+- UI Case 仅允许 `ui_candidate_selection`（有限候选定位辅助，动作前重新读取页面确认），驱动仍为 Playwright；
 - API Case 仅允许 `api_semantic_judgment`（语义级期望判定），驱动仍为 Vitest + Node fetch；
 - 严禁供应商切换回退 (`failure_fallback`)，必须明确成本上限与 Expected 映射；
 - 线上真实调用必须获用户授权。

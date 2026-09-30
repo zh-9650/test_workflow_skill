@@ -289,8 +289,8 @@ def _validate_final_jev_audit(cid, pc, item, summary):
     mode = jev.get('mode', 'none')
     runtime = item.get('runtime_result') or {}
     invocations = runtime.get('jev_invocations')
-    if invocations is None and isinstance(runtime.get('jev_invocation'), dict):
-        invocations = [runtime['jev_invocation']]
+    if 'jev_invocation' in runtime:
+        fail(f'{cid}.jev_invocation','legacy singular invocation is forbidden')
 
     if mode == 'none':
         if invocations:
@@ -298,6 +298,10 @@ def _validate_final_jev_audit(cid, pc, item, summary):
         return
 
     if mode == 'required':
+        if item.get('source_kind')=='data_readiness': return
+        if runtime.get('status')=='BLOCKED' and runtime.get('target_action_executed') is False and runtime.get('actual_execution') in (None,'NOT_EXECUTED') and not invocations:
+            if not runtime.get('jev_skipped_reason'): fail(f'{cid}.jev_skipped_reason','unexecuted BLOCKED must retain Jev skip reason')
+            return
         if not invocations:
             fail(f'{cid}.jev_policy', 'required Jev invocation missing in final case results')
 
@@ -335,6 +339,54 @@ def derive_assessment(rows,plan_by):
     regression_complete = (len(unresolved) == 0)
     return {'coverage_complete':coverage_ok,'core_flow_passed':core_ok,'unresolved_critical_defects':len(critical),'blocked_scope':[r['case_id'] for r in blocked],'regression_complete':regression_complete,'conclusion':conclusion}
 
+
+def _reconcile_versions(run, plan, state, ledger_rows, summaries):
+    env=plan['target_environment']['env_id']
+    initial=plan['target_environment']['initial_deployment_version']
+    events=state.get('deployment_events',[])
+    versions={initial:-1}; verified=[]
+    for index,event in enumerate(events):
+        p,payload=_run_json(run,event.get('event_ref',''),'deployment_events.event_ref')
+        if not p.is_relative_to((run/'internal/execution/deployments').resolve()):
+            fail('deployment_events.event_ref','must stay under internal/execution/deployments')
+        if _sha256(p)!=event.get('event_sha256'):
+            fail('deployment_events.event_sha256','event file hash mismatch')
+        if payload!={k:v for k,v in event.items() if k not in {'event_ref','event_sha256'}}:
+            fail('deployment_events','state event differs from immutable event file')
+        if event.get('target_env')!=env or not event.get('deployment_version'):
+            fail('deployment_events','event environment/version must match current Run')
+        evidence=run/event.get('evidence_ref','')
+        if not evidence.resolve().is_relative_to((run/'evidence').resolve()) or not evidence.is_file() or _sha256(evidence)!=event.get('evidence_sha256'):
+            fail('deployment_events.evidence','deployment proof is missing or changed')
+        version=event['deployment_version']
+        if version in versions: fail('deployment_events.deployment_version','version must identify a new deployment event')
+        versions[version]=index; verified.append(event)
+    latest=verified[-1]['deployment_version'] if verified else initial
+    if state.get('current_deployment_version',latest)!=latest:
+        fail('current_deployment_version','must match latest verified deployment event')
+    reconciliation=[]
+    for cid,item in ledger_rows.items():
+        summary=summaries[cid]
+        regression=item.get('regression_execution') or {}
+        result=(item.get('regression_result') if item.get('source') in {'regression_passed','regression_impact_passed'} else item.get('runtime_result')) or {}
+        actual_env=result.get('target_environment') or (env if item.get('source_kind')=='data_readiness' else None)
+        actual_version=result.get('deployment_version') or regression.get('deployment_version') or (item.get('deployment_version') if item.get('source_kind')=='data_readiness' else None)
+        if actual_env!=env or actual_version not in versions:
+            fail(f'{cid}.deployment_version','actual result must bind a verified Run environment and deployment version')
+        if summary.get('target_environment')!=actual_env or summary.get('deployment_version')!=actual_version:
+            fail(f'{cid}.deployment_version','final summary must preserve actual result environment/version')
+        status=item.get('final_result') or item.get('status')
+        later=verified[versions[actual_version]+1:]
+        if status in {'PASS','PASS_AFTER_FIX'}:
+            for event in later:
+                impact=event.get('impact_decision') or {}
+                if cid in impact.get('affected_pass_cases',[]):
+                    fail(f'{cid}.deployment_version','affected old PASS must be revalidated after deployment')
+                if not isinstance(impact.get('rationale'),str) or not impact['rationale'].strip():
+                    fail(f'{cid}.deployment_version','old PASS requires explicit no-retest rationale for each later deployment')
+        reconciliation.append({'case_id':cid,'target_environment':env,'verified_version':actual_version,'latest_target_version':latest,'old_version_evidence':actual_version!=latest,'not_retested_rationale':[e['impact_decision']['rationale'] for e in later]})
+    return {'initial_deployment_version':initial,'latest_target_version':latest,'deployment_events':verified,'case_versions':reconciliation,'unexecuted_scope':[cid for cid,item in ledger_rows.items() if (item.get('final_result') or item.get('status'))=='BLOCKED']}
+
 def validate(v,run_dir=None):
     if run_dir is None: run_dir=v.get('run_dir')
     if not run_dir: fail('run_dir','required so Final Review can reopen real Planning/Runtime/Evidence files')
@@ -351,6 +403,14 @@ def validate(v,run_dir=None):
         fail('run_status.pending_resume_batches','Cases unblocked by regression still require data recheck, execution and Reviewer closure')
     if run_state.get('pending_resume'):
         fail('run_status.pending_resume','a regression-unblocked Batch resume is still active')
+    if run_state.get('open_defects'):
+        fail('run_status.open_defects','unresolved defect actions prevent Final Review')
+    if run_state.get('current_worker'):
+        fail('run_status.current_worker','active Worker work prevents Final Review')
+    if run_state.get('current_reviewer'):
+        fail('run_status.current_reviewer','active Reviewer work prevents Final Review')
+    if run_state.get('pending_user_inputs'):
+        fail('run_status.pending_user_inputs','unresolved user input prevents Final Review')
     stale_blocked_items=[x for x in run_state.get('blocked_items',[]) if x.get('case_id') in ledger.get('cases',{}) and (ledger['cases'][x['case_id']].get('final_result') or ledger['cases'][x['case_id']].get('status'))!='BLOCKED']
     if stale_blocked_items: fail('run_status.blocked_items','resolved Cases must be removed from the active blocked queue before Final Review')
     plan_binding=run_state.get('confirmation_bindings',{}).get('execution-plan')
@@ -419,6 +479,9 @@ def validate(v,run_dir=None):
                     fail(f'batch_results[{bid}].data_readiness','Data Readiness BLOCKED cases must be reviewer-confirmed')
                 if not item.get('data_readiness_review'):
                     fail(f'batch_results[{bid}].data_readiness','Data Readiness Review artifact/contract required')
+                review=item['data_readiness_review']
+                reopened=defect_mod.validate_data_readiness_review(run,item.get('data_readiness_review_ref'),bid,review.get('affected_case_ids',[]))
+                if reopened!=review: fail(f'batch_results[{bid}].data_readiness','ledger review differs from raw Reviewer artifact')
             continue
         state_path=run/f'internal/execution/runtime-state/{bid}-state.json'
         if not state_path.exists(): fail(f'batch_results[{bid}]',f'missing runtime state {state_path}')
@@ -477,6 +540,9 @@ def validate(v,run_dir=None):
             if status!='BLOCKED': fail(f'{cid}.status','data_readiness source_kind must have status BLOCKED')
             if item.get('reviewer_confirmed') is not True: fail(f'{cid}.ledger','data_readiness result must be reviewer-confirmed')
             if not item.get('data_readiness_review'): fail(f'{cid}.data_readiness_review','data_readiness review required')
+            review=item['data_readiness_review']
+            reopened=defect_mod.validate_data_readiness_review(run,item.get('data_readiness_review_ref'),pc.get('batch_id'),review.get('affected_case_ids',[]))
+            if cid not in reopened['affected_case_ids'] or reopened!=review: fail(f'{cid}.data_readiness_review','ledger must match raw review and include Case')
             if not (summary.get('blocked_reason') or item.get('blocked_reason') or item.get('data_readiness_review',{}).get('blocked_reason')):
                 fail(f'{cid}.blocked_reason','required for data_readiness BLOCKED case')
         else:
@@ -486,6 +552,23 @@ def validate(v,run_dir=None):
         if status=='FAIL' and not (item.get('bug_ref') or item.get('existing_bug_ref') or summary.get('bug_ref') or summary.get('existing_bug_ref') or summary.get('no_bug_reason')): fail(f'{cid}.FAIL','bug closure required')
         if status=='BLOCKED' and not (summary.get('blocked_reason') or item.get('blocked_reason') or item.get('runtime_result',{}).get('blocked_reason')): fail(f'{cid}.blocked_reason','required')
         _validate_final_jev_audit(cid,pc,item,summary)
+        for preparation in item.get('preparation_history',[]):
+            prior=preparation.get('review') or {}
+            raw=defect_mod.validate_data_readiness_review(run,preparation.get('review_ref'),pc['batch_id'],prior.get('affected_case_ids',[]))
+            if raw!=prior or cid not in prior['affected_case_ids']:
+                fail(f'{cid}.preparation_history','preserved preparation BLOCKED must match raw independent review')
+
+    v['version_reconciliation']=_reconcile_versions(run.resolve(),plan,run_state,ledger_rows,summary_by)
+    rounds=[]
+    for bid,state in runtime_states.items():
+        history=[{'phase':'initial','results_ref':state.get('worker_results_ref')}]
+        history.extend({'phase':f"{entry.get('mode') or 'local_retest'}-{index}",'results_ref':entry.get('results_ref')} for index,entry in enumerate(state.get('retest_history',[]),1))
+        for entry in history:
+            if not entry['results_ref']: continue
+            _,results=_run_json(run,entry['results_ref'],'report.execution_rounds')
+            for result in results:
+                rounds.append({'batch_id':bid,'case_id':result['case_id'],'phase':entry['phase'],'status':result['status'],'target_environment':result['target_environment'],'deployment_version':result['deployment_version'],'results_ref':entry['results_ref']})
+    v['version_reconciliation']['execution_rounds']=rounds
 
     dashboard_path=run/'dashboard/dashboard-data.json'
     if not dashboard_path.is_file(): fail('dashboard','dashboard-data.json is required for Final Review reconciliation')
@@ -540,7 +623,7 @@ def validate(v,run_dir=None):
     assessment=derive_assessment(rows,plan_by)
     if assessment['conclusion'] not in CONCLUSIONS: fail('final_assessment.conclusion','invalid')
     v['final_assessment']=assessment
-    return {'ok':True,'cases':len(rows),'final_assessment':assessment}
+    return {'ok':True,'cases':len(rows),'final_assessment':assessment,'version_reconciliation':v['version_reconciliation']}
 
 if __name__=='__main__':
     a=argparse.ArgumentParser(); a.add_argument('--input',required=True); a.add_argument('--run-dir',required=True); x=a.parse_args()

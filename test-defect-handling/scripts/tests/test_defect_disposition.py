@@ -35,6 +35,10 @@ def _isolated_run(tmp_path):
     plan_binding = status["confirmation_bindings"]["execution-plan"]
     plan_binding["contract_path"] = str(plan_path.resolve())
     _write_json(status_path, status)
+    ledger = _read_json(run_dir / LEDGER_REL)
+    ledger['cases'][SOURCE_CASE]['defect_id'] = 'DEFECT-CLI-001'
+    ledger['cases'][SOURCE_CASE]['bug_ref'] = 'BUG-001'
+    _write_json(run_dir / LEDGER_REL, ledger)
     return run_dir
 
 
@@ -51,6 +55,8 @@ def test_defect_disposition_succeeds_and_updates_ledger_and_dashboard(tmp_path):
 
     disp_payload = {
         "defect_id": "DEFECT-CLI-001",
+        "bug_ref": "BUG-001",
+        "decision_source": "user-message:explicit-postponement-001",
         "disposition": "postponed",
         "operator": "quality-auditor",
         "rationale": "Spec agreed to postpone fix to next release",
@@ -93,6 +99,8 @@ def test_defect_disposition_fails_cleanly_on_invalid_disposition_without_ledger_
 
     disp_payload = {
         "defect_id": "DEFECT-CLI-001",
+        "bug_ref": "BUG-001",
+        "decision_source": "user-message:explicit-postponement-001",
         "disposition": "invalid_disp",
         "operator": "quality-auditor",
         "rationale": "Invalid",

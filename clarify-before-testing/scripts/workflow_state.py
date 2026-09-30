@@ -11,7 +11,7 @@ LEGAL={
  'business-modeling':{'case-design'},
  'case-design':{'business-modeling','execution-planning'},
  'execution-planning':{'data-readiness','case-design'},
- 'data-readiness':{'execution-runtime','execution-planning'},
+ 'data-readiness':{'execution-runtime','execution-planning','defect-handling'},
  'execution-runtime':{'defect-handling','result-review','data-readiness','execution-planning','case-design'},
  'defect-handling':{'execution-runtime','data-readiness','result-review'},
  'result-review':{'closed'}, 'closed':set(),
@@ -117,9 +117,18 @@ def set_batch_data_ready(state_path,batch_id,manifest_path):
     root=Path(__file__).resolve().parents[2]
     m=_load_module(root/'test-data-readiness/scripts/data_manifest.py','batch_data_manifest_bound')
     validation=m.validate(manifest,plan,run)
+    deployment=s.get('last_deployment_event')
+    deployment_binding={}
+    if isinstance(deployment,dict):
+        if manifest.get('applicable_version')!=deployment.get('deployment_version'):
+            fail('batch_data.applicable_version','manifest must be revalidated for the latest verified deployment version')
+        event_path=(run/deployment.get('event_ref','')).resolve()
+        if not _inside(event_path,run/'internal/execution/deployments') or not event_path.is_file() or sha256(event_path)!=deployment.get('event_sha256'):
+            fail('batch_data.deployment_event','latest deployment event is missing or changed')
+        deployment_binding={'deployment_event_ref':deployment['event_ref'],'deployment_event_sha256':deployment['event_sha256'],'deployment_version':deployment['deployment_version']}
     rec={'batch_id':batch_id,'manifest_path':str(mp),'manifest_sha256':sha256(mp),
          'plan_path':str(plan_path),'plan_sha256':plan_binding['contract_sha256'],
-         'validated_at':now(),'validation':validation}
+         'validated_at':now(),'validation':validation,**deployment_binding}
     s.setdefault('batch_data_bindings',{})[batch_id]=rec
     s.setdefault('batch_data_status',{})[batch_id]='ready'
     ready_parallel=[]
@@ -143,6 +152,9 @@ def set_batch_data_ready(state_path,batch_id,manifest_path):
     s['current_action']={'type':'batch_data_ready','batch_id':batch_id}
     if len(ready_parallel)<2:
         s['next_action']=({'type':'resume_blocked_cases','batch_id':batch_id,'case_ids':resume.get('case_ids',[]),'bug_ref':resume.get('bug_ref')} if resume else {'type':'execute_batch','batch_id':batch_id})
+    if s.get('pending_regression_data')==batch_id:
+        s['parallel_batch_ids']=[]; s['current_batch']=batch_id
+        s['next_action']={'type':'return_to_defect_handling','batch_id':batch_id}
     s['updated_at']=now(); write(state_path,s); return s
 
 def _validate_contract(state_path,kind,contract_input,for_confirmation=False):
@@ -329,12 +341,27 @@ def _check_prereq(s,source,target,target_batch=None):
                 fail('transition',f'Batch {target_bid} data manifest changed or disappeared')
             if pp.resolve()!=plan_path.resolve() or binding.get('plan_sha256')!=plan_binding.get('contract_sha256'):
                 fail('transition',f'Batch {target_bid} data binding does not match the current confirmed execution plan')
+    elif (source,target)==('data-readiness','defect-handling'):
+        bid=target_batch or s.get('current_batch')
+        binding=s.get('batch_data_bindings',{}).get(bid,{})
+        latest=s.get('last_deployment_event') or {}
+        if s.get('pending_regression_data')!=bid or not latest or binding.get('deployment_event_sha256')!=latest.get('event_sha256'):
+            fail('transition','return to Regression requires revalidated data bound to the latest deployment')
+        path=Path(binding.get('manifest_path',''))
+        if not path.is_file() or sha256(path)!=binding.get('manifest_sha256'):
+            fail('transition','Regression data manifest changed after readiness')
     elif (source,target)==('result-review','closed'):
         if s.get('final_review_status')!='passed' or not s.get('final_review_source'): fail('transition','validated final review artifact must be bound before closing Run')
         src=s['final_review_source']; p=Path(src.get('path',''))
         if not p.exists() or sha256(p)!=src.get('sha256'): fail('transition','final review artifact changed after validation')
+        report=src.get('report') or {}; report_path=Path(report.get('path',''))
+        if not report_path.is_file() or sha256(report_path)!=report.get('sha256'): fail('transition','final report changed or is missing after validation')
+        contract=Path(__file__).resolve().parents[2]/'test-result-review/scripts/final_review.py'
+        _load_module(contract,'final_review_at_close').validate(read(p),run_dir=_run_dir_from_state(state_path))
 
 def set_final_review_from_file(state_path,review_file):
+    s=read(state_path)
+    if s.get('current_stage')!='result-review': fail('final_review_source','Run must be in result-review before binding its final report')
     rp=Path(review_file).resolve()
     if not rp.exists(): fail('final_review_source',f'file not found: {review_file}')
     data=read(rp)
@@ -342,7 +369,12 @@ def set_final_review_from_file(state_path,review_file):
     m=_load_module(contract,'final_review_contract_bound')
     run_dir=_run_dir_from_state(state_path)
     out=m.validate(data,run_dir=run_dir)
+    report_mod=_load_module(contract.with_name('report.py'),'final_report_renderer')
+    report_path=run_dir/'deliverables/test-report.md'
+    report_path.parent.mkdir(parents=True,exist_ok=True)
+    report_path.write_text(report_mod.render(data),encoding='utf-8')
     s=read(state_path); s['final_review_status']='passed'; s['final_review_source']={'path':str(rp),'sha256':sha256(rp),'validated_at':now(),'conclusion':out.get('final_assessment',{}).get('conclusion')}
+    s['final_review_source']['report']={'path':str(report_path.resolve()),'sha256':sha256(report_path)}
     s.setdefault('artifacts',{})['final-review']=s['final_review_source']; s['last_event']={'type':'final_review_validated','at':now()}; s['next_action']={'type':'close_run'}; s['updated_at']=now(); write(state_path,s); return s
 
 def _normal_batch_data_transition(s,source,target,batch):
@@ -354,6 +386,8 @@ def _normal_batch_data_transition(s,source,target,batch):
         return True
     b_status=s.get('batch_status',{}).get(batch)
     if b_status in {'pending','needs_rework'}:
+        return True
+    if source=='defect-handling' and (s.get('last_deployment_event') or {}).get('impact_decision',{}).get('data_recheck_needed') is True:
         return True
     cur_data_st=s.get('batch_data_status',{}).get(batch)
     if cur_data_st in {None,'unprepared','preparing'} and batch!=s.get('current_batch'):
@@ -398,6 +432,8 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
         s['pending_resume']=None
         s['parallel_batch_ids']=[]
     if stage=='data-readiness':
+        if source=='defect-handling' and (_run_dir_from_state(path)/f'internal/execution/runtime-state/{batch}-state.json').exists() and (s.get('last_deployment_event') or {}).get('impact_decision',{}).get('data_recheck_needed') is True:
+            s['pending_regression_data']=batch
         if batch:
             s.setdefault('batch_data_status',{})[batch]='preparing'
             s['current_batch_data_ready']=(s.get('batch_data_status',{}).get(batch)=='ready')
@@ -406,6 +442,8 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
         if previous_next.get('type') in {'prepare_resumed_cases_data','resolve_blocked_cases'} and previous_next.get('batch_id')==batch:
             s['pending_resume']={'batch_id':batch,'case_ids':previous_next.get('case_ids',[]),'bug_ref':previous_next.get('bug_ref')}
         else: s['pending_resume']=None
+    if source=='data-readiness' and stage=='defect-handling':
+        s.pop('pending_regression_data',None)
     write(path,s); return s
 
 WAITING_TYPES={'waiting_for_worker_slot','waiting_for_reviewer_slot','subagent_unavailable','waiting_for_fix_deployment'}
@@ -476,6 +514,9 @@ def create_stage_snapshot(state_path,output_path=None):
         'snapshot_at': now(),
         'stage_at_snapshot': s.get('current_stage'),
         'environment': env_info,
+        'current_deployment_version':s.get('current_deployment_version',env_info.get('initial_deployment_version')),
+        'deployment_events':s.get('deployment_events',[]),
+        'pending_resume_batches':s.get('pending_resume_batches',[]),
         'batch_status': s.get('batch_status', {}),
         'cases_summary': cases_summary,
         'open_defects': s.get('open_defects', []),
@@ -489,7 +530,8 @@ def create_stage_snapshot(state_path,output_path=None):
     write(state_path, s)
     return snapshot
 
-def record_defect_disposition(state_path,defect_id,disposition,operator,rationale,cases=None,target_version=None):
+def record_defect_disposition(state_path,defect_id,disposition,operator,rationale,cases=None,target_version=None,bug_ref=None,decision_source=None):
+    if read(state_path).get('current_stage')=='closed': fail('disposition','closed Run is immutable')
     if disposition not in {'postponed','wontfix'}:
         fail('disposition','must be postponed or wontfix')
     run_dir=_run_dir_from_state(state_path)
@@ -512,6 +554,8 @@ def record_defect_disposition(state_path,defect_id,disposition,operator,rational
         fail('cases','affected_case_ids must be specified or resolved from defect')
     disp_payload={
         'defect_id':defect_id,
+        'bug_ref':bug_ref,
+        'decision_source':decision_source,
         'disposition':disposition,
         'operator':operator,
         'rationale':rationale,
@@ -527,14 +571,50 @@ def record_defect_disposition(state_path,defect_id,disposition,operator,rational
 
 def record_deployment_verified(state_path,target_env,deployment_version,verification_method,evidence_ref,impact_decision=None):
     s=read(state_path); run_dir=_run_dir_from_state(state_path)
+    if s.get('current_stage')=='closed': fail('deployment','closed Run is immutable')
     if not isinstance(target_env,str) or not target_env.strip():
         fail('target_env','non-empty target_env is required')
     if not isinstance(deployment_version,str) or not deployment_version.strip():
         fail('deployment_version','non-empty deployment_version is required')
     if not isinstance(verification_method,str) or not verification_method.strip():
         fail('verification_method','verification_method is required (e.g. git_commit_sha, http_health_endpoint, container_tag)')
+    plan_path,_=_confirmed_plan_binding(s); plan=read(plan_path)
+    planned_env=plan.get('target_environment',{})
+    if not isinstance(planned_env,dict) or target_env!=planned_env.get('env_id'):
+        fail('target_env',f'must equal confirmed planned env {planned_env.get("env_id")}')
+    if not isinstance(impact_decision,dict):
+        fail('impact_decision','explicit deployment impact analysis is required')
+    expected_impact={'old_pass_retest_needed','affected_pass_cases','data_recheck_needed','rationale'}
+    if set(impact_decision)!=expected_impact:
+        fail('impact_decision',f'exact fields required: {sorted(expected_impact)}')
+    affected=impact_decision.get('affected_pass_cases')
+    if not isinstance(impact_decision.get('old_pass_retest_needed'),bool):
+        fail('impact_decision.old_pass_retest_needed','boolean required')
+    if not isinstance(affected,list) or any(not isinstance(cid,str) or not cid for cid in affected) or len(affected)!=len(set(affected)):
+        fail('impact_decision.affected_pass_cases','unique list of Case IDs required')
+    if impact_decision['old_pass_retest_needed'] != bool(affected):
+        fail('impact_decision.old_pass_retest_needed','must be true exactly when affected_pass_cases is non-empty')
+    if not isinstance(impact_decision.get('data_recheck_needed'),bool):
+        fail('impact_decision.data_recheck_needed','boolean required')
+    if not isinstance(impact_decision.get('rationale'),str) or not impact_decision['rationale'].strip():
+        fail('impact_decision.rationale','non-empty rationale required')
+    planned_cases={c.get('case_id') for c in plan.get('cases',[]) if isinstance(c,dict)}
+    if not set(affected).issubset(planned_cases):
+        fail('impact_decision.affected_pass_cases','all affected Cases must belong to the confirmed plan')
+    if affected:
+        ledger_path=run_dir/'internal/execution/results/case-results-ledger.json'
+        if not ledger_path.is_file(): fail('impact_decision.affected_pass_cases','Case result ledger is required')
+        rows=read(ledger_path).get('cases',{})
+        for cid in affected:
+            row=rows.get(cid,{})
+            status=row.get('final_result') or row.get('status') or row.get('initial_result')
+            if status not in {'PASS','PASS_AFTER_FIX'} or row.get('reviewer_confirmed') is not True:
+                fail(f'impact_decision.affected_pass_cases[{cid}]','must be a Reviewer-confirmed prior PASS')
     ev_path=Path(evidence_ref)
     if not ev_path.is_absolute(): ev_path=run_dir/ev_path
+    ev_path=ev_path.resolve()
+    if not _inside(ev_path,run_dir/'evidence'):
+        fail('evidence_ref','deployment verification evidence must stay under the current Run evidence directory')
     if not ev_path.is_file():
         fail('evidence_ref',f'deployment verification evidence file missing: {evidence_ref}')
     ev_hash=sha256(ev_path)
@@ -547,13 +627,13 @@ def record_deployment_verified(state_path,target_env,deployment_version,verifica
         'evidence_ref':str(ev_path.resolve().relative_to(run_dir.resolve())).replace('\\','/'),
         'evidence_sha256':ev_hash,
         'verified_at':now(),
-        'impact_decision':impact_decision or {
-            'old_pass_retest_needed':False,
-            'affected_pass_cases':[],
-            'data_recheck_needed':True,
-            'rationale':'Default evaluation on verified fix deployment'
-        }
+        'impact_decision':impact_decision
     }
+    event_path=run_dir/'internal/execution/deployments'/f'{event_id}.json'
+    write(event_path,deploy_event)
+    deploy_event={**deploy_event,
+                  'event_ref':str(event_path.resolve().relative_to(run_dir.resolve())).replace('\\','/'),
+                  'event_sha256':sha256(event_path)}
     s.setdefault('deployment_events',[]).append(deploy_event)
     s['current_deployment_version']=deployment_version
     s['last_deployment_event']=deploy_event
@@ -572,8 +652,8 @@ def main():
     p=sp.add_parser('set-final-review'); p.add_argument('--state',required=True); p.add_argument('--review-file',required=True)
     p=sp.add_parser('record-waiting'); p.add_argument('--state',required=True); p.add_argument('--type',required=True,choices=sorted(WAITING_TYPES)); p.add_argument('--reason')
     p=sp.add_parser('create-snapshot'); p.add_argument('--state',required=True); p.add_argument('--output')
-    p=sp.add_parser('record-disposition'); p.add_argument('--state',required=True); p.add_argument('--defect-id',required=True); p.add_argument('--disposition',required=True,choices=['postponed','wontfix']); p.add_argument('--operator',required=True); p.add_argument('--rationale',required=True); p.add_argument('--cases'); p.add_argument('--target-version')
-    p=sp.add_parser('record-deployment-verified'); p.add_argument('--state',required=True); p.add_argument('--target-env',required=True); p.add_argument('--version',required=True); p.add_argument('--method',default='git_commit_sha'); p.add_argument('--evidence',required=True)
+    p=sp.add_parser('record-disposition'); p.add_argument('--state',required=True); p.add_argument('--defect-id',required=True); p.add_argument('--bug-ref',required=True); p.add_argument('--decision-source',required=True); p.add_argument('--disposition',required=True,choices=['postponed','wontfix']); p.add_argument('--operator',required=True); p.add_argument('--rationale',required=True); p.add_argument('--cases'); p.add_argument('--target-version')
+    p=sp.add_parser('record-deployment-verified'); p.add_argument('--state',required=True); p.add_argument('--target-env',required=True); p.add_argument('--version',required=True); p.add_argument('--method',default='git_commit_sha'); p.add_argument('--evidence',required=True); p.add_argument('--impact-analysis',required=True,help='JSON file containing explicit old PASS and data recheck impact analysis')
     p=sp.add_parser('show'); p.add_argument('--state',required=True)
     x=a.parse_args()
     if x.cmd=='init': v=init(x.run_dir,x.run_id)
@@ -586,8 +666,8 @@ def main():
     elif x.cmd=='set-final-review': v=set_final_review_from_file(x.state,x.review_file)
     elif x.cmd=='record-waiting': v=record_waiting_state(x.state,x.type,x.reason)
     elif x.cmd=='create-snapshot': v=create_stage_snapshot(x.state,x.output)
-    elif x.cmd=='record-disposition': v=record_defect_disposition(x.state,x.defect_id,x.disposition,x.operator,x.rationale,x.cases,x.target_version)
-    elif x.cmd=='record-deployment-verified': v=record_deployment_verified(x.state,x.target_env,x.version,x.method,x.evidence)
+    elif x.cmd=='record-disposition': v=record_defect_disposition(x.state,x.defect_id,x.disposition,x.operator,x.rationale,x.cases,x.target_version,x.bug_ref,x.decision_source)
+    elif x.cmd=='record-deployment-verified': v=record_deployment_verified(x.state,x.target_env,x.version,x.method,x.evidence,read(x.impact_analysis))
     else: v=read(x.state)
     print(json.dumps(v,ensure_ascii=False,indent=2))
 if __name__=='__main__': main()

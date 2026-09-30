@@ -181,10 +181,15 @@ def apply_event(d,event):
         if ref not in d['recordings']: d['recordings'][ref]={'scope':scope,'source_case_ids':[]}
         if isinstance(d['recordings'][ref],str): d['recordings'][ref]={'status':d['recordings'][ref],'scope':scope,'source_case_ids':[]}
         d['recordings'][ref]['scope']=scope; d['recordings'][ref]['status']=event.get('status')
+    elif typ=='data_preparation_fix_verified':
+        ref=event.get('bug_ref')
+        for item in d.get('defects',[]):
+            if item.get('id')==ref:
+                item['status']='verified_after_data_preparation_fix'; item['verified_deployment_version']=event.get('deployment_version')
     elif typ=='defect_disposition_applied':
-        defect_id=event.get('defect_id'); disp=event.get('disposition'); cids=set(event.get('case_ids',[]))
+        defect_id=event.get('defect_id'); bug_ref=event.get('bug_ref'); disp=event.get('disposition'); cids=set(event.get('case_ids',[]))
         for b in d.get('defects',[]):
-            if b.get('id')==defect_id or set(b.get('case_ids',[])).intersection(cids):
+            if b.get('id') in {defect_id,bug_ref}:
                 b['status']=f'disposition_{disp}'; b['disposition']=disp
         for cid in cids: upsert_case(d,cid,disposition=disp)
         for b in d.get('batches',[]):
@@ -381,11 +386,19 @@ def _apply_event_files_unlocked(run_status_path,dashboard_path,event):
         s['open_defects']=[x for x in s.get('open_defects',[]) if x!=ref]
         s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('reason')!=ref]
         for ucid in unblocked: s.setdefault('case_status',{})[ucid]='PENDING'
+    elif typ=='data_preparation_fix_verified':
+        if state_stage!='execution-runtime': raise AssertionError('preparation fix requires completed first Runtime review')
+        ref=event.get('bug_ref')
+        s['open_defects']=[x for x in s.get('open_defects',[]) if not ((x.get('bug_ref')==ref or x.get('defect_id')==ref) if isinstance(x,dict) else x==ref)]
+        s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('case_id') not in event.get('case_ids',[])]
     elif typ=='defect_disposition_applied':
-        defect_id=event.get('defect_id'); cids=set(event.get('case_ids',[]))
-        s['open_defects']=[x for x in s.get('open_defects',[]) if (x.get('defect_id') if isinstance(x,dict) else x)!=defect_id and x not in cids]
-        s['blocked_items']=[x for x in s.get('blocked_items',[]) if x.get('reason')!=defect_id and x.get('case_id') not in cids]
-        s.setdefault('defect_dispositions',[]).append({'defect_id':defect_id,'disposition':event.get('disposition'),'case_ids':list(cids),'at':d['last_updated']})
+        defect_id=event.get('defect_id'); bug_ref=event.get('bug_ref'); cids=set(event.get('case_ids',[]))
+        refs={defect_id,bug_ref}
+        s['open_defects']=[x for x in s.get('open_defects',[]) if not ((x.get('defect_id') in refs or x.get('bug_ref') in refs) if isinstance(x,dict) else x in refs)]
+        # Preserve BLOCKED facts and risk while clearing the explicitly terminated fix obligation.
+        for item in s.get('blocked_items',[]):
+            if item.get('reason') in refs or item.get('case_id') in cids: item['disposition']=event.get('disposition')
+        s.setdefault('defect_dispositions',[]).append({'defect_id':defect_id,'bug_ref':bug_ref,'decision_source':event.get('decision_source'),'disposition':event.get('disposition'),'case_ids':list(cids),'at':d['last_updated']})
     if typ in {'case_finished','case_blocked'} and cid:
         s.setdefault('case_status',{})[cid]=('BLOCKED' if typ=='case_blocked' else event.get('status'))
     if typ=='case_blocked' or (typ=='case_finished' and event.get('status')=='BLOCKED'):
