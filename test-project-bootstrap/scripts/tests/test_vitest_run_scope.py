@@ -311,6 +311,10 @@ def test_playwright_scope_targets_only_the_current_run_batch_and_case(tmp_path):
     scope = json.loads(result.stdout)
     assert Path(scope["testDir"]) == target.parent
     assert scope["testMatch"] == "TC-UI-001.spec.ts"
+    # The official scoped typecheck consumes these shared authority fields too.
+    assert Path(scope["runDir"]) == run_dir
+    assert scope["target"] == "scripts/ui/B01/TC-UI-001.spec.ts"
+    assert Path(scope["absoluteTarget"]) == target
     assert Path(scope["resultsDir"]) == run_dir / "runner-results" / "B01" / "TC-UI-001" / "attempt-001"
 
 

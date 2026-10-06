@@ -202,13 +202,16 @@ export function resolveApiScriptScope(automationDir, env = process.env, options 
 }
 
 export function resolveUiScriptScope(automationDir, env = process.env, options = {}) {
-  const { runDir, target, resultsDir } = resolveScriptTarget(automationDir, env, {
+  const { runDir, target, absoluteTarget, resultsDir } = resolveScriptTarget(automationDir, env, {
     driver: 'ui',
     pattern: /^scripts\/ui\/([^/]+)\/([^/]+\.spec\.ts)$/,
     extension: 'spec.ts',
     ...options,
   });
   return {
+    runDir,
+    target,
+    absoluteTarget,
     testDir: dirname(resolve(runDir, ...target.split('/'))),
     testMatch: target.split('/').at(-1),
     resultsDir,

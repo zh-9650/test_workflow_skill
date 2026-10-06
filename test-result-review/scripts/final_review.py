@@ -75,6 +75,22 @@ def _initial_batch_review(state):
         fail('review_history','exactly one initial Batch Reviewer record is required')
     return initial[0]
 
+def _validate_reviewed_artifact_history(run,reviewer_task,task,results,review,runtime_mod):
+    """Preserve rejected inputs as history, never as accepted evidence.
+
+    Every snapshot still passes integrity/binding checks. Completeness applies
+    to accepted Cases; explicitly rejected Cases must be accounted for by the
+    separately validated completed Retest chain and final ledger below.
+    """
+    accepted=results
+    if review.get('status')=='rework_required':
+        rejected=review.get('retest_case_ids')
+        if (not isinstance(rejected,list) or not rejected or
+            len(rejected)!=len(set(rejected)) or not set(rejected)<=set(task['case_order'])):
+            fail('reviewer.retest_case_ids','valid explicit rejection scope required')
+        accepted=[result for result in results if result['case_id'] not in set(rejected)]
+    runtime_mod._validate_frozen_artifacts(run,reviewer_task,task,accepted)
+
 def _validate_reviewer_output(run,receipt,reviewer_task,review,reviewer_session,path):
     outputs=receipt.get('outputs',{}) if isinstance(receipt,dict) else {}
     if not isinstance(outputs,dict) or len(outputs)!=1:
@@ -117,10 +133,10 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
     runtime_mod._validate_reviewer_task_hash(reviewer_task)
     if reviewer_task.get('results_sha256')!=_sha256(result_path) or reviewer_task.get('worker_self_review_sha256')!=_sha256(self_path):
         fail(f'batch[{bid}].reviewer_task','Worker results/self-review hashes differ from frozen Reviewer input')
-    runtime_mod._validate_frozen_artifacts(run,reviewer_task,task,results)
     reviewer=state.get('reviewer') or {}
     review_history=state.get('review_history',[])
     initial_review=_initial_batch_review(state)
+    _validate_reviewed_artifact_history(run,reviewer_task,task,results,initial_review,runtime_mod)
     if review_history:
         last_local_review=_latest_accepted_local_retest_review(run,bid,state)
         expected_final_review=(runtime_mod._compose_reviewer_review(initial_review,last_local_review,task['case_order'])
@@ -179,7 +195,7 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
         if rworker.get('outputs',{}).get(str(entry.get('results_ref')))!=_sha256(rresults_path): fail(prefix+'.worker_dispatch_receipt.outputs','must bind the Retest results hash')
         if rworker.get('outputs',{}).get(str(entry.get('self_review_ref')))!=_sha256(rself_path): fail(prefix+'.worker_dispatch_receipt.outputs','must bind the Retest self-review hash')
         if rtask_review.get('results_sha256')!=_sha256(rresults_path) or rtask_review.get('worker_self_review_sha256')!=_sha256(rself_path): fail(prefix+'.reviewer_task','Retest hashes differ from frozen Reviewer input')
-        runtime_mod._validate_frozen_artifacts(run,rtask_review,rtask,rresults)
+        _validate_reviewed_artifact_history(run,rtask_review,rtask,rresults,rreview,runtime_mod)
         recovery_history=rtask_review.get('worker_recovery_history',[])
         for recovery_index,recovery in enumerate(recovery_history):
             recovery_prefix=f'{prefix}.worker_recovery_history[{recovery_index}]'
@@ -561,13 +577,13 @@ def validate(v,run_dir=None):
     v['version_reconciliation']=_reconcile_versions(run.resolve(),plan,run_state,ledger_rows,summary_by)
     rounds=[]
     for bid,state in runtime_states.items():
-        history=[{'phase':'initial','results_ref':state.get('worker_results_ref')}]
-        history.extend({'phase':f"{entry.get('mode') or 'local_retest'}-{index}",'results_ref':entry.get('results_ref')} for index,entry in enumerate(state.get('retest_history',[]),1))
+        history=[{'phase':'initial','results_ref':state.get('worker_results_ref'),'review_status':_initial_batch_review(state)['status']}]
+        history.extend({'phase':f"{entry.get('mode') or 'local_retest'}-{index}",'results_ref':entry.get('results_ref'),'review_status':entry['review']['status']} for index,entry in enumerate(state.get('retest_history',[]),1))
         for entry in history:
             if not entry['results_ref']: continue
             _,results=_run_json(run,entry['results_ref'],'report.execution_rounds')
             for result in results:
-                rounds.append({'batch_id':bid,'case_id':result['case_id'],'phase':entry['phase'],'status':result['status'],'target_environment':result['target_environment'],'deployment_version':result['deployment_version'],'results_ref':entry['results_ref']})
+                rounds.append({'batch_id':bid,'case_id':result['case_id'],'phase':entry['phase'],'status':result['status'],'review_status':entry['review_status'],'target_environment':result['target_environment'],'deployment_version':result['deployment_version'],'results_ref':entry['results_ref']})
     v['version_reconciliation']['execution_rounds']=rounds
 
     dashboard_path=run/'dashboard/dashboard-data.json'

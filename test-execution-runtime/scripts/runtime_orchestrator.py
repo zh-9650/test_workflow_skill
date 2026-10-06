@@ -157,6 +157,24 @@ def _validate_host_receipt(receipt,role,task,worker_session_id=None):
     _parse_time(receipt.get('started_at'),'dispatch_receipt.started_at')
     return session
 
+def _result_artifact_refs(result):
+    """Declared local inputs used for Expected, prerequisites or abnormal review."""
+    refs=[]; run=result.get('automation_run') or {}; official=run.get('official_run') or {}
+    refs.extend([run.get('script_ref'),run.get('static_check_report_ref'),official.get('report_ref'),
+                 official.get('runner_results_ref'),result.get('recording_ref'),result.get('video_ref'),result.get('script_basis_ref')])
+    def append_refs(values):
+        for ref in values or []:
+            refs.append(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)
+    for row in result.get('expected_results',[]): append_refs(row.get('evidence_refs',row.get('evidence',[])))
+    append_refs(result.get('evidence_refs'))
+    append_refs(result.get('precondition_evidence_refs'))
+    for attempt in run.get('debug_attempts',[]) or []:
+        refs.extend(value for key,value in attempt.items() if key.endswith('_ref') and isinstance(value,str))
+        append_refs(attempt.get('evidence_refs'))
+    for invocation in result.get('jev_invocations',[]) or []:
+        refs.extend(value for key,value in invocation.items() if key.endswith('_ref') and isinstance(value,str))
+    return [ref for ref in refs if ref]
+
 def _case_artifact_manifest(base,task,results):
     root=_Path(base).resolve(); planned={c['case_id']:c for c in task['cases']}; manifest={}
     if task.get('data_readiness_recovery'):
@@ -165,14 +183,13 @@ def _case_artifact_manifest(base,task,results):
             if not _inside(path,root) or not path.is_file(): fail('data_readiness_recovery','missing current-Run preparation artifact')
             manifest[ref]=_sha256(path)
     for result in results:
-        cid=result['case_id']; refs=[]; run=result.get('automation_run') or {}; official=run.get('official_run') or {}
-        refs.extend([run.get('script_ref'),official.get('report_ref'),result.get('recording_ref'),result.get('video_ref')])
-        for row in result.get('expected_results',[]):
-            for ref in row.get('evidence_refs',row.get('evidence',[])) or []:
-                refs.append(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)
-        for ref in result.get('evidence_refs',[]) or []: refs.append(ref.get('path') or ref.get('ref') if isinstance(ref,dict) else ref)
-        for invocation in result.get('jev_invocations',[]) or []:
-            refs.extend(value for key,value in invocation.items() if key.endswith('_ref') and isinstance(value,str))
+        cid=result['case_id']; refs=_result_artifact_refs(result)
+        if cid not in planned: fail('artifacts.case_id','must belong to the frozen Task')
+        # Preserve failed attempts and preparation observations too. Enumerate
+        # only at freeze time: later attempts must not invalidate old snapshots.
+        case_evidence=root/'evidence'/task['batch_id']/cid
+        if case_evidence.exists():
+            refs.extend(str(path) for path in case_evidence.rglob('*') if path.is_file())
         for ref in refs:
             if not ref: continue
             path=_Path(ref); path=(path if path.is_absolute() else root/path).resolve()
@@ -264,6 +281,14 @@ def _validate_frozen_artifacts(base,reviewer_task,task,results):
     snapshot_hashes={ref:item.get('sha256') for ref,item in reviewer_task['artifact_snapshot_manifest'].items()}
     if snapshot_hashes!=reviewer_task.get('artifact_sha256'):
         fail('reviewer_task.artifact_sha256','must exactly match the immutable artifact snapshot hashes')
+    root=_Path(base).resolve()
+    for result in results:
+        for ref in _result_artifact_refs(result):
+            path=_Path(ref); path=(path if path.is_absolute() else root/path).resolve()
+            try: relative=path.relative_to(root).as_posix()
+            except ValueError: fail('reviewer_task.artifact_sha256','referenced input escapes the current Run')
+            if relative not in snapshot_hashes:
+                fail('reviewer_task.artifact_sha256',f'missing referenced input {relative} from immutable snapshot')
 
 def validate_result_from_snapshot(base,reviewer_task,plan_case,result):
     """Validate a historical result against its immutable reviewer-input artifacts."""
@@ -679,12 +704,14 @@ def recover_worker_dispatch_files(run_dir,batch_id,receipt_path,terminal_evidenc
     if retest and not holder: fail('active_retest','no active Retest exists')
     previous=holder.get('worker_dispatch_receipt') or {}
     if previous.get('receipt_status')!='dispatched': fail('worker_recovery','only a dispatched, unfinished host Worker can be recovered')
-    case_id=holder.get('current_case')
-    if not case_id: fail('worker_recovery.current_case','an interrupted active Case is required')
+    active_case_id=holder.get('current_case')
     if holder.get('partial_case_results'):
         fail('worker_recovery.partial_case_results','cannot replace a Worker after it has committed any Case in this Task')
     task_ref=holder.get('task_ref') if retest else state.get('task_ref')
     task=_read_task(base,task_ref)
+    # A host can terminate after dispatch but before case-start. Preserve that
+    # fact; select the first Case for artifact archival without starting it.
+    case_id=active_case_id if active_case_id is not None else task['case_order'][0]
     if case_id not in task.get('case_order',[]): fail('worker_recovery.current_case','is not in the frozen Task')
     evidence=_read_json(terminal_evidence_path)
     old_session=previous.get('agent_session_id')
@@ -726,7 +753,8 @@ def recover_worker_dispatch_files(run_dir,batch_id,receipt_path,terminal_evidenc
     new_receipt=deepcopy(new_receipt); new_receipt['accepted_at']=datetime.now(timezone.utc).isoformat(); new_receipt['receipt_status']='dispatched'; new_receipt['recovery_sequence']=recovery_seq
     record={
         'schema_version':1,'batch_id':batch_id,'task_id':task['task_id'],'task_hash':task['task_hash'],
-        'case_id':case_id,'previous_worker_receipt':deepcopy(previous),'terminal_evidence_ref':terminal_ref,
+        'case_id':case_id,'recovery_phase':'active_case' if active_case_id is not None else 'before_first_case',
+        'previous_worker_receipt':deepcopy(previous),'terminal_evidence_ref':terminal_ref,
         'terminal_evidence_sha256':terminal_hash,'artifacts':artifacts,'observed_at':observed,
         'replacement_worker_receipt':deepcopy(new_receipt),
     }

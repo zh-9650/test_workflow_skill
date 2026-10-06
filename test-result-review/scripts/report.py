@@ -21,7 +21,7 @@ def render(v):
     for index,event in enumerate(versions['deployment_events'],1):
         lines.append(f"\n部署轮次 {index}：{safe(event['deployment_version'])}；证据 `{safe(event['evidence_ref'])}`；影响评估：{safe(event['impact_decision']['rationale'])}")
     for row in versions.get('execution_rounds',[]):
-        lines.append(f"\n{safe(row['case_id'])} / {safe(row['phase'])}：{safe(row['status'])}，版本 {safe(row['deployment_version'])}，证据 `{safe(row['results_ref'])}`")
+        lines.append(f"\n{safe(row['case_id'])} / {safe(row['phase'])}：Worker原始结果 {safe(row['status'])}，独立复核 {safe(row['review_status'])}，版本 {safe(row['deployment_version'])}，证据 `{safe(row['results_ref'])}`")
     version_text='\n'.join(lines)
     blocked='、'.join(versions['unexecuted_scope']) or '无'
     return f'''# 测试报告\n\n## 1. 测试范围\n{v.get('scope','')}\n\n## 2. 执行概况\n{v.get('execution_summary','')}\n\n## 3. 核心业务流程结果\n{v.get('core_flow_results','')}\n\n## 4. 缺陷情况\n{v.get('defects','')}\n\n## 5. 修复与回归情况\n{version_text}\n{v.get('regression','')}\n\n## 6. 未完成/受阻范围\n未执行完成的 Case：{blocked}\n{v.get('blocked','')}\n\n## 7. 主要质量风险\n{v.get('risks','')}\n\n## 8. 最终测试结论\n{conclusion}\n'''

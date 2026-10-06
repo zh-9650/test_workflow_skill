@@ -315,7 +315,7 @@ def _require_current_confirmed(s,kind,msg):
     if kind not in s.get('confirmation_bindings',{}): fail('transition',msg)
     return rec
 
-def _check_prereq(s,source,target,target_batch=None):
+def _check_prereq(s,source,target,target_batch=None,*,state_path):
     if (source,target)==('business-modeling','case-design'):
         _require_current_confirmed(s,'business-understanding','business understanding must be contract-validated, self-reviewed, artifact-bound and user-confirmed')
     elif (source,target)==('case-design','execution-planning'):
@@ -403,7 +403,7 @@ def transition(path,stage,next_type,batch=None,case=None,return_reason=None):
         return_reason=return_reason.strip()
         if not return_reason: fail('return_reason','must be non-empty after trimming')
     if (source,stage) in BACKWARD and not return_reason and not normal_batch_loop: fail('return_reason',f'required for corrective transition {source}->{stage}')
-    _check_prereq(s,source,stage,batch)
+    _check_prereq(s,source,stage,batch,state_path=path)
     previous_next=dict(s.get('next_action') or {})
     next_act={'type':next_type}
     if batch: next_act['batch_id']=batch
@@ -452,6 +452,7 @@ def record_waiting_state(state_path,waiting_type,reason=None,details=None):
     if waiting_type not in WAITING_TYPES:
         fail('waiting_type',f'unsupported waiting type {waiting_type}; must be one of {sorted(WAITING_TYPES)}')
     s=read(state_path)
+    if s.get('current_stage')=='closed': fail('waiting_state','closed Run is immutable')
     act={'type':waiting_type}
     if reason: act['reason']=reason
     if details: act['details']=details
@@ -459,13 +460,71 @@ def record_waiting_state(state_path,waiting_type,reason=None,details=None):
     s['last_event']={'type':'waiting_state_recorded','waiting_type':waiting_type,'reason':reason,'at':now()}
     s['updated_at']=now(); write(state_path,s); return s
 
+def _validate_snapshot_runtime(run,pc,item,modules,sessions):
+    final,runtime,worker,reviewer=modules
+    bid=pc['batch_id']; cid=pc['case_id']
+    _,state=final._run_json(run,f'internal/execution/runtime-state/{bid}-state.json','stage_snapshot.runtime_state')
+    result=item.get('runtime_result')
+    if not isinstance(result,dict): fail('stage_snapshot.runtime_result',f'{cid} requires raw Runtime result')
+    candidates=[]
+    entries=[state]+state.get('retest_history',[])
+    for entry in entries:
+        results_ref=entry.get('worker_results_ref') or entry.get('results_ref')
+        if not results_ref: continue
+        result_path,results=final._run_json(run,results_ref,'stage_snapshot.results_ref')
+        if not isinstance(results,list): fail('stage_snapshot.results_ref','Worker results must be a list')
+        if result in results:
+            candidates.append((entry,result_path,results))
+    if len(candidates)!=1: fail('stage_snapshot.runtime_result',f'{cid} must match exactly one frozen Worker result file')
+    entry,result_path,results=candidates[0]
+    _,task=final._run_json(run,entry.get('task_ref',''),'stage_snapshot.task_ref')
+    runtime.validate_task(task)
+    if task['batch_id']!=bid or cid not in task['case_order']:
+        fail('stage_snapshot.task',f'{cid} must belong to the planned Batch')
+    if next(c for c in task['cases'] if c['case_id']==cid)!=pc:
+        fail('stage_snapshot.task','frozen Case must equal the current confirmed planned Case')
+    self_ref=entry.get('worker_self_review_ref') or entry.get('self_review_ref')
+    self_path,self_review=final._run_json(run,self_ref or '', 'stage_snapshot.self_review_ref')
+    _,rtask=final._run_json(run,entry.get('reviewer_task_ref',''),'stage_snapshot.reviewer_task_ref')
+    runtime._validate_reviewer_task_hash(rtask)
+    if rtask.get('worker_task_hash')!=task['task_hash'] or rtask.get('results_sha256')!=sha256(result_path) or rtask.get('worker_self_review_sha256')!=sha256(self_path):
+        fail('stage_snapshot.reviewer_task','frozen Worker Task/results/self-review hashes must match')
+    runtime._validate_frozen_artifacts(run,rtask,task,results)
+    wr=entry.get('worker_dispatch_receipt'); rr=entry.get('reviewer_dispatch_receipt')
+    ws=final._validate_dispatch_receipt(run,wr,'execution_worker',task,final._result_status_summary(results),'stage_snapshot.worker_receipt')
+    review=final._initial_batch_review(state) if entry is state else entry.get('review')
+    rs=final._validate_dispatch_receipt(run,rr,'result_reviewer',rtask,(review or {}).get('status'),'stage_snapshot.reviewer_receipt')
+    if result.get('task_id')!=task['task_id'] or result.get('task_hash')!=task['task_hash'] or result.get('agent_session_id')!=ws:
+        fail('stage_snapshot.runtime_result','result must bind the frozen Task and dispatched Worker')
+    outputs={str(ref).replace('\\','/'):digest for ref,digest in wr.get('outputs',{}).items()}
+    if len(outputs)!=len(wr.get('outputs',{})):
+        fail('stage_snapshot.worker_receipt','duplicate normalized output references')
+    if outputs.get(str(result_path.relative_to(run)).replace('\\','/'))!=sha256(result_path) or outputs.get(str(self_ref).replace('\\','/'))!=sha256(self_path):
+        fail('stage_snapshot.worker_receipt','receipt must bind actual results and self-review')
+    key=(bid,task['task_hash'])
+    if key not in sessions:
+        if ws==rs or ws in sessions.values() or rs in sessions.values(): fail('stage_snapshot.agent_sessions','Worker and Reviewer must use distinct sessions')
+        sessions[(key,'worker')]=ws; sessions[(key,'reviewer')]=rs; sessions[key]=None
+    worker.validate(self_review,task['case_order'],results,task_id=task['task_id'],task_hash=task['task_hash'],worker_session_id=ws,results_sha256=sha256(result_path))
+    final._validate_reviewer_output(run,rr,rtask,review,rs,'stage_snapshot.reviewer_receipt')
+    reviewer.validate(review,task['case_order'],results,reviewer_task=rtask,worker_session_id=ws,reviewer_session_id=rs,results_sha256=sha256(result_path))
+    if review.get('status')!='passed': fail('stage_snapshot.reviewer','independent Reviewer must accept the result')
+    runtime.validate_result_from_snapshot(run,rtask,pc,result)
+    status=item.get('final_result') or item.get('status')
+    if status!='PASS_AFTER_FIX' and status!=result.get('status'):
+        fail('stage_snapshot.runtime_result','ledger status must match raw accepted Runtime result')
+    if status=='PASS_AFTER_FIX':
+        defect=_load_module(Path(__file__).resolve().parents[2]/'test-defect-handling/scripts/defect_contract.py','snapshot_regression_contract')
+        final._validate_ledger_regression(item,cid,item.get('regression_result'),read(_confirmed_plan_binding(read(run/'internal/state/run-status.json'))[0]),run,defect)
+
 def create_stage_snapshot(state_path,output_path=None):
     s=read(state_path); run_dir=_run_dir_from_state(state_path)
+    if s.get('current_stage')=='closed': fail('stage_snapshot','closed Run is immutable')
 
     # 1. Gate: Verify all initial planned cases are reviewer-confirmed
-    plan_path=run_dir/'internal/execution/execution-plan.json'
-    if not plan_path.is_file():
-        fail('execution_plan', 'Execution plan is required to create a stage snapshot')
+    _require_current_confirmed(s,'execution-plan','snapshot requires a current confirmed execution plan')
+    plan_path,_=_confirmed_plan_binding(s)
+    _validate_contract(state_path,'execution-plan',plan_path,for_confirmation=True)
     plan=read(plan_path)
     planned_cases=plan.get('cases', [])
     if not planned_cases:
@@ -476,7 +535,18 @@ def create_stage_snapshot(state_path,output_path=None):
         fail('case_results_ledger', 'Case results ledger is required to create a stage snapshot')
     ledger=read(ledger_path)
     ledger_cases=ledger.get('cases', {})
+    if set(ledger_cases)!={pc['case_id'] for pc in planned_cases}:
+        fail('stage_snapshot.case_sets','ledger Cases must exactly match the current confirmed plan')
 
+    root=Path(__file__).resolve().parents[2]
+    import sys
+    runtime_root=root/'test-execution-runtime/scripts'
+    if str(runtime_root) not in sys.path: sys.path.insert(0,str(runtime_root))
+    modules=(_load_module(root/'test-result-review/scripts/final_review.py','snapshot_review_sources'),
+             _load_module(runtime_root/'runtime_orchestrator.py','snapshot_runtime'),
+             _load_module(runtime_root/'worker_review.py','snapshot_worker_review'),
+             _load_module(runtime_root/'reviewer_contract.py','snapshot_reviewer_contract'))
+    sessions={}
     for pc in planned_cases:
         cid = pc['case_id']
         if cid not in ledger_cases:
@@ -485,15 +555,26 @@ def create_stage_snapshot(state_path,output_path=None):
         if item.get('reviewer_confirmed') is not True:
             fail('stage_snapshot.unreviewed_case', f'Case {cid} has not been confirmed by Reviewer')
         status = item.get('final_result') or item.get('status')
-        if not status or status in {'PENDING', 'RUNNING', 'NOT_EXECUTED'}:
+        if status not in {'PASS','FAIL','BLOCKED','PASS_AFTER_FIX'}:
             fail('stage_snapshot.incomplete_case', f'Case {cid} has non-final status {status}')
         if item.get('source_kind') == 'data_readiness':
-            if not item.get('data_readiness_review'):
-                fail('stage_snapshot.data_readiness', f'Case {cid} is blocked at data readiness without confirmed data_readiness_review')
+            review=item.get('data_readiness_review') or {}
+            defect=_load_module(root/'test-defect-handling/scripts/defect_contract.py','snapshot_preparation_review')
+            raw=defect.validate_data_readiness_review(run_dir,item.get('data_readiness_review_ref'),pc['batch_id'],review.get('affected_case_ids',[]))
+            if status!='BLOCKED' or raw!=review or cid not in raw['affected_case_ids']:
+                fail('stage_snapshot.data_readiness','ledger must match actual independent preparation review and BLOCKED scope')
+        else:
+            _validate_snapshot_runtime(run_dir,pc,item,modules,sessions)
 
     # 2. Gate: Output path must be within deliverables/
-    deliverables_dir = (run_dir / 'deliverables').resolve()
-    deliverables_dir.mkdir(parents=True, exist_ok=True)
+    deliverables_path = run_dir / 'deliverables'
+    candidate = Path(output_path).absolute() if output_path else deliverables_path
+    for ancestor in [candidate,*candidate.parents]:
+        if ancestor.is_symlink() or getattr(ancestor,'is_junction',lambda:False)():
+            fail('output_path','snapshot output cannot use symbolic link or junction ancestors')
+        if ancestor==run_dir: break
+    deliverables_dir = deliverables_path.resolve()
+    if not _inside(deliverables_dir,run_dir): fail('output_path','deliverables directory escapes the current Run')
     if output_path:
         out = Path(output_path).resolve()
         try:
@@ -503,6 +584,9 @@ def create_stage_snapshot(state_path,output_path=None):
     else:
         ts_label = now().replace(':', '-').replace('.', '-')
         out = deliverables_dir / f'stage-snapshot-{ts_label}.json'
+    if out==deliverables_dir or out.exists() or out.is_symlink(): fail('output_path','snapshot output must be a new file without overwriting existing artifacts')
+    temporary=out.with_suffix(out.suffix+'.tmp')
+    if temporary.exists() or temporary.is_symlink(): fail('output_path','snapshot temporary output already exists')
 
     cases_summary = {cid: c.get('final_result') or c.get('status') for cid, c in ledger_cases.items()}
     env_info = plan.get('target_environment') or {}

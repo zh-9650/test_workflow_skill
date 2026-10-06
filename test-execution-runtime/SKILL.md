@@ -552,7 +552,7 @@ Runtime `case-finish` → 校验 Result/Evidence → 保存该 Case 结果 → D
 
 Batch 内仍由同一个 Worker 串行执行，不因此变成“一 Case 一个 Agent”。如果 Worker 只是执行过程短暂中断且宿主会话仍可恢复，由同一会话从当前未完成 Case 开头重跑；已经 `case-finish` 的 Case 结果保留。
 
-如果宿主明确报告 Worker Task 已终止（例如额度耗尽），禁止沿用旧 session 或直接覆盖其 receipt。主 Agent先保存宿主返回的真实终止信息，并用 `worker-recover-dispatch` 为同一冻结 Task 派发新 Worker：该命令只接受尚无任何已提交 Case Result 的活动 Task，将旧派发、终止记录、当前 Case 脚本和 Evidence 做不可变快照，再绑定真实新 session。新 Worker 必须从当前 Case 开始重新执行正式脚本并完成自审；Reviewer Task 与 Final Review 必须校验完整恢复链。若 Task 已提交过 Case Result，Runtime 拒绝原地更换 Worker；按明确的新 Task/Run 流程恢复，不能混用多个 Worker 的 Batch 结果。
+如果宿主明确报告 Worker Task 已终止（例如额度耗尽），禁止沿用旧 session 或直接覆盖其 receipt。主 Agent先保存宿主返回的真实终止信息，并用 `worker-recover-dispatch` 为同一冻结 Task 派发新 Worker：该命令只接受尚无任何已提交 Case Result 的活动 Task，将旧派发、终止记录、当前 Case 脚本和 Evidence 做不可变快照，再绑定真实新 session。若 Worker 在首次 `case-start` 前终止，记录 `recovery_phase=before_first_case`，归档第一条 Case 已有资料，但保留 `current_case=null`；新 Worker 自己调用 `case-start`，不得补造旧 Worker 的执行记录。新 Worker 必须从当前 Case（尚未开始时为第一条 Case）开始重新执行正式脚本并完成自审；Reviewer Task 与 Final Review 必须校验完整恢复链。若 Task 已提交过 Case Result，Runtime 拒绝原地更换 Worker；按明确的新 Task/Run 流程恢复，不能混用多个 Worker 的 Batch 结果。
 
 局部补测使用对应的 `retest-case-start / retest-case-finish`。恢复当前活动 Worker Task 的宿主终止流程使用 `worker-recover-dispatch`，不能通过手改 Runtime state 或 Dashboard 实现。
 
