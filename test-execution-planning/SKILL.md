@@ -3,6 +3,11 @@ name: test-execution-planning
 description: Plan how the user-confirmed test cases will actually be executed for the current Run. 仅在测试用例已经 AI 自审并由用户确认后使用。决定每条 Case 的 UI/API/人工主执行方式、辅助验证、Batch、依赖、顺序、数据策略、并发资格和证据方案；AI 自审后由用户确认。Runtime 不得重新做这些决策。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Test Execution Planning｜测试执行规划
 
 定位：

@@ -3,6 +3,11 @@ name: clarify-before-testing
 description: Route and resume the current software-testing Run across business understanding, test design, execution planning, data preparation, runtime execution, defect/regression, and final review. 仅在用户正在开展一个具体测试任务、明确要求继续/恢复测试流程，或当前工作区已存在 Run 状态时使用；不要用于普通测试知识问答。Router 只负责识别当前 Run、当前阶段、人工确认和下一动作，不承担业务分析或测试执行。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Clarify Before Testing｜测试流程路由
 
 这个 Skill 是总路由，不是“总 Agent 大脑”。
@@ -34,7 +39,7 @@ Router 根据当前已确认产物选择对应 Skill，不允许一个 Skill 同
 
 # 1. 总流程
 
-进入目标项目前，先检查 `test-project-bootstrap` 的项目 Profile、工作流版本以及宿主入口（Claude 的 `CLAUDE.md` 或 Codex 的 `AGENTS.md`）测试托管区块。两者均指向同一共享项目测试索引 `.test-workflow/PROJECT_TESTING_INDEX.md`。缺失或漂移时先完成项目级 Bootstrap，再发现或创建 Run。Bootstrap 不写 `current_stage`，普通 Run 恢复不重复初始化。目标项目若尚未经用户授权，不运行 Bootstrap 修改该项目。
+先读项目的 `项目记忆/开始这里.md`，判断工作类型、模块与适用范围。正式测试通过 `testing/测试线.yaml` 选择当前聊天的测试线和唯一 Run，再读取实际状态。项目记忆缺失时报告需要接入，不因普通恢复自动覆盖业务项目。旧 Profile 和托管区块不再是项目知识的运行前提；迁移中的活跃 Run 按目录册实际路径读取，禁止双写和回退新状态。
 
 正式 Runtime 的 `next_action=execute_batch` 只授权主 Agent 组装任务和派独立 Execution Worker。若 Router 输出 `execute_parallel_batches(batch_ids)`，仅可为所列且已分别绑定数据的 `parallel_safe` Batch 启动独立 Runtime；所有 Batch 必须无跨 Batch 未满足依赖、Data Manifest 对象引用互不重叠。每个 Batch 各派 Worker，Worker 自审后再派该 Batch 的新会话 Reviewer；不可跨 Batch 合并角色。子 Agent 槽位不足或不可用时，进入明确等待状态（`waiting_for_worker_slot`、`waiting_for_reviewer_slot`、`subagent_unavailable`），严禁由主 Agent 代跑。自动化 Case 的正式执行必须是最终 TypeScript 脚本运行。
 
@@ -77,12 +82,12 @@ closed
 
 # 2. 首先判断当前 Run
 
-项目 Bootstrap 已完成且版本匹配后，再检查是否已有当前 Run。
+项目知识入口已定位后，通过测试线判断当前 Run。
 
 优先：
 
 ```bash
-python clarify-before-testing/scripts/workflow_state.py discover --root work/test-runs
+python clarify-before-testing/scripts/workflow_state.py discover --project-root <项目根目录> --line <测试线ID>
 ```
 
 处理：

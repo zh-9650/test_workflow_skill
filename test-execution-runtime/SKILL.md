@@ -3,6 +3,11 @@ name: test-execution-runtime
 description: Execute planned, data-ready Batch(es) reliably and produce trustworthy per-Case results and evidence. 仅在执行方案已确认且当前 Batch 数据已准备完成时使用。每 Batch 一位独立 Execution Worker，Batch 内默认串行；仅 Router 明确授权的 parallel_safe Batch 可并行且各自独立复核。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Test Execution Runtime｜正式执行
 
 定位：

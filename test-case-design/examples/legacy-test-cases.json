@@ -1,0 +1,272 @@
+{
+  "schema_version": "2.0.0",
+  "case_design_version": "CD-PHASE5-SYN-01",
+  "test_point_version": "TP-PHASE5-SYN-01",
+  "business_model_version": "BM-PHASE5-SYN-01",
+  "review_questions": [],
+  "expansion_records": [
+    {
+      "tp_id": "TP-CREATE-VALID",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-CREATE-VALID"
+      ]
+    },
+    {
+      "tp_id": "TP-READ-ISOLATED",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-READ-ISOLATED"
+      ]
+    },
+    {
+      "tp_id": "TP-CREATE-RECOVER",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-CREATE-RECOVER"
+      ]
+    }
+  ],
+  "case_templates": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Create valid item",
+      "target_action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-CREATE-VALID",
+          "checkpoint": "final",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "test_point_ids": [
+            "TP-CREATE-VALID"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    },
+    {
+      "case_id": "TC-API-READ-ISOLATED",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Read isolated control item",
+      "target_action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-READ-ISOLATED",
+          "checkpoint": "final",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "test_point_ids": [
+            "TP-READ-ISOLATED"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    },
+    {
+      "case_id": "TC-API-CREATE-RECOVER",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Read B01 regression-created item after repair",
+      "target_action": "GET /api/items/item-phase5-b01 after reviewer-confirmed B01 Regression PASS",
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services.",
+        "Require reviewer-confirmed B01 Regression after repair to have created item-phase5-b01; reuse that same retained fixture object and only read it."
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/item-phase5-b01 after reviewer-confirmed B01 Regression PASS"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-CREATE-RECOVER",
+          "checkpoint": "final",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching B01 Regression result",
+          "test_point_ids": [
+            "TP-CREATE-RECOVER"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    }
+  ],
+  "execution_instances": [
+    {
+      "instance_id": "I-TC-API-CREATE-VALID",
+      "case_id": "TC-API-CREATE-VALID",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "variation": "Single isolated synthetic request; first invocation follows formal script execution.",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "name": "Phase5 Item"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-CREATE-VALID"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    },
+    {
+      "instance_id": "I-TC-API-READ-ISOLATED",
+      "case_id": "TC-API-READ-ISOLATED",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "variation": "Single isolated synthetic request; first invocation follows formal script execution.",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "preseeded_control_id": "control-001"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-READ-ISOLATED"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    },
+    {
+      "instance_id": "I-TC-API-CREATE-RECOVER",
+      "case_id": "TC-API-CREATE-RECOVER",
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "variation": "Single isolated synthetic request; first invocation follows formal script execution.",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "created_by_case_id": "TC-API-CREATE-VALID"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-CREATE-RECOVER"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    }
+  ],
+  "test_cases_self_review": {
+    "status": "passed",
+    "point_coverage_complete": true,
+    "instance_coverage_complete": true,
+    "assertion_mapping_complete": true,
+    "failure_masking_checked": true,
+    "parameterization_checked": true,
+    "complex_cases_checked": true,
+    "no_unresolved_expected": true
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    }
+  }
+}

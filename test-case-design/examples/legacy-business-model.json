@@ -1,0 +1,395 @@
+{
+  "schema_version": "3.0",
+  "model_version": "BM-PHASE5-SYN-01",
+  "scope": {
+    "in_scope": [
+      "synthetic catalog item create/read API"
+    ],
+    "dependency_scope": [],
+    "out_of_scope": [
+      "real products",
+      "authentication",
+      "database persistence"
+    ]
+  },
+  "source_registry": [
+    {
+      "source_id": "SRC-SYN-01",
+      "type": "synthetic_test_baseline",
+      "title": "Phase 5 Synthetic Catalog Fixture Rules",
+      "description": "This isolated fixture defines a tiny in-memory catalog API solely to exercise Run orchestration contracts; it is not a real product specification."
+    }
+  ],
+  "modules": [
+    {
+      "module_id": "MOD-CATALOG",
+      "name": "Synthetic Catalog",
+      "purpose": "Create and read isolated in-memory catalog records.",
+      "function_names": [
+        "create item",
+        "read item"
+      ],
+      "object_ids": [
+        "OBJ-ITEM"
+      ],
+      "event_ids": [
+        "EV-CREATE-VALID",
+        "EV-READ-ISOLATED",
+        "EV-CREATE-RECOVER"
+      ]
+    }
+  ],
+  "business_objects": [
+    {
+      "object_id": "OBJ-ITEM",
+      "module_id": "MOD-CATALOG",
+      "name": "Catalog Item",
+      "business_purpose": "A synthetic record used to exercise state-free API orchestration.",
+      "stable_identity": "unique item id",
+      "key_fields": [
+        "id",
+        "name"
+      ],
+      "key_rules": [
+        "RULE-NAME"
+      ],
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    }
+  ],
+  "state_machines": [],
+  "relationships": [],
+  "events": [
+    {
+      "event_id": "EV-CREATE-VALID",
+      "module_id": "MOD-CATALOG",
+      "name": "Create valid item",
+      "actors": [
+        "synthetic API caller"
+      ],
+      "trigger": "POST /api/items with non-empty name",
+      "preconditions": [],
+      "inputs": [
+        "name"
+      ],
+      "outputs": [
+        "201 response with id and exact name"
+      ],
+      "direct_changes": [
+        "one in-memory item is added"
+      ],
+      "state_changes": [],
+      "relationship_changes": [],
+      "downstream_impacts": [],
+      "must_not_change": [
+        "other item records"
+      ],
+      "failure_conditions": [
+        "server may incorrectly reject a valid name"
+      ],
+      "failure_final_facts": [
+        "on rejected create, no item is added"
+      ],
+      "source_status": "TEST_BASELINE",
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    },
+    {
+      "event_id": "EV-READ-ISOLATED",
+      "module_id": "MOD-CATALOG",
+      "name": "Read existing item",
+      "actors": [
+        "synthetic API caller"
+      ],
+      "trigger": "GET /api/items/{id}",
+      "preconditions": [],
+      "inputs": [
+        "id"
+      ],
+      "outputs": [
+        "200 response containing requested id and name"
+      ],
+      "direct_changes": [],
+      "state_changes": [],
+      "relationship_changes": [],
+      "downstream_impacts": [],
+      "must_not_change": [
+        "all catalog records"
+      ],
+      "failure_conditions": [],
+      "failure_final_facts": [],
+      "source_status": "TEST_BASELINE",
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    },
+    {
+      "event_id": "EV-CREATE-RECOVER",
+      "module_id": "MOD-CATALOG",
+      "name": "Read item created by repaired B01 regression",
+      "actors": [
+        "synthetic API caller"
+      ],
+      "trigger": "GET /api/items/item-phase5-b01 after B01 regression has created the deterministic item",
+      "preconditions": [
+        "B01 Regression after repair is reviewer-confirmed PASS and the fixture process retains its state"
+      ],
+      "inputs": [
+        "deterministic id item-phase5-b01"
+      ],
+      "outputs": [
+        "200 response with the same deterministic id and Phase5 Item name"
+      ],
+      "direct_changes": [],
+      "state_changes": [],
+      "relationship_changes": [],
+      "downstream_impacts": [],
+      "must_not_change": [
+        "the B01-created item",
+        "unrelated items"
+      ],
+      "failure_conditions": [],
+      "failure_final_facts": [],
+      "source_status": "TEST_BASELINE",
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "invariant_id": "INV-UNIQUE-READ",
+      "description": "An item read by its returned id has the same id and name as the successful create response.",
+      "applies_to_refs": [
+        "OBJ-ITEM",
+        "EV-CREATE-VALID",
+        "EV-READ-ISOLATED"
+      ],
+      "source_status": "TEST_BASELINE",
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "rule_id": "RULE-NAME",
+      "description": "A trimmed, non-empty item name is accepted by create.",
+      "applies_to_refs": [
+        "MOD-CATALOG",
+        "OBJ-ITEM",
+        "EV-CREATE-VALID",
+        "EV-CREATE-RECOVER"
+      ],
+      "source_status": "TEST_BASELINE",
+      "source_refs": [
+        "SRC-SYN-01"
+      ]
+    }
+  ],
+  "cross_module_flows": [],
+  "unknowns": [],
+  "blocked_scopes": [],
+  "requirements_completeness_review": {
+    "status": "passed",
+    "dimensions": [
+      {
+        "dimension": "create_edit_delete",
+        "applicable": true,
+        "status": "covered",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "EV-CREATE-VALID"
+        ],
+        "question_ids": [],
+        "reason": ""
+      },
+      {
+        "dimension": "state_transitions",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "relationship_lifecycle",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "failure_atomicity",
+        "applicable": true,
+        "status": "covered",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "EV-CREATE-VALID"
+        ],
+        "question_ids": [],
+        "reason": ""
+      },
+      {
+        "dimension": "recovery",
+        "applicable": true,
+        "status": "covered",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "EV-CREATE-VALID"
+        ],
+        "question_ids": [],
+        "reason": ""
+      },
+      {
+        "dimension": "history_current_fact",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "authorization_scope",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "async_retry_idempotency",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "long_flow_branches",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "cross_module_impact",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "concurrency_stale_state",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "uniqueness_reuse",
+        "applicable": false,
+        "status": "not_applicable",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "OBJ-ITEM"
+        ],
+        "question_ids": [],
+        "reason": "Synthetic scope has no state, relations, authorization, async, flow, concurrency, or reuse semantics."
+      },
+      {
+        "dimension": "data_consistency",
+        "applicable": true,
+        "status": "covered",
+        "evidence_refs": [
+          "SRC-SYN-01"
+        ],
+        "model_refs": [
+          "EV-CREATE-VALID"
+        ],
+        "question_ids": [],
+        "reason": ""
+      }
+    ]
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    }
+  },
+  "self_review": {
+    "status": "passed",
+    "checks": {
+      "scope_checked": true,
+      "objects_checked": true,
+      "states_checked": true,
+      "relationships_checked": true,
+      "events_checked": true,
+      "invariants_checked": true,
+      "flows_checked": true,
+      "source_status_checked": true,
+      "unknowns_checked": true,
+      "requirements_completeness_checked": true,
+      "readability_checked": true,
+      "presentation_sync_checked": true
+    }
+  }
+}

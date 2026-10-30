@@ -3,6 +3,11 @@ name: test-result-review
 description: Reconcile the entire completed testing Run and produce the final human-readable quality conclusion and report. 仅在计划内 Batch 已执行/复核完毕，缺陷与回归状态已稳定后使用。对账正式 Case、Execution Planning、最终结果、Bug、BLOCKED、执行方式、证据与回归历史；不重新执行测试，也不能只看通过率。生成最终报告后由 Router 绑定真实复核产物再关闭 Run。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Test Result Review｜最终结果复核
 
 定位：

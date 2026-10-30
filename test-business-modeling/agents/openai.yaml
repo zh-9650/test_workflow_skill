@@ -1,4 +1,4 @@
 interface:
-  display_name: "业务理解 / Test Business Modeling"
-  short_description: "梳理对象、状态、关系、事件、流程、不变量和待确认问题"
-  default_prompt: "Use $test-business-modeling for the current business-understanding stage. Read all current evidence, build and challenge the business model, resolve facts from evidence first, collect unresolved business decisions at the end of the human-readable document with recommendations and impacts, update the model after feedback, and do not generate test points or cases."
+  display_name: "业务理解"
+  short_description: "查证业务目标和有效需求，用例子澄清规则，保留状态关系承接、版本并存事实、可追溯验收与未决边界"
+  default_prompt: "使用 $test-business-modeling 理解当前业务：先完整核对原件与有效需求（拆分本期/已取消混合子句），逐控件检查用户入口，沿关键长链走到正常、失败、中断、恢复和交叉版本的终态，再用经原文核实的例子澄清规则并建立模型；按任务用中文图解解释条件、结果和判断依据，核对每项有效要求的实际承接，逐事件检查状态与关系适用性并链接机制，用有效子句与业务结果的双向追溯和效果核查脚本识别旧规则复活、未决当确定和长链缺口，按新旧有效规则做防退化复核，真实独立审查后才交付；将有背景的待确认问题集中在末尾；不生成测试点或用例。"

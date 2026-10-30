@@ -1,0 +1,233 @@
+{
+  "schema_version": "1.1",
+  "design_version": "points-v1",
+  "business_model_version": "business-v1",
+  "coverage_obligations": [
+    {
+      "coverage_id": "COV-1",
+      "description": "Verify the confirmed event result.",
+      "type": "event_behavior",
+      "status": "covered",
+      "source_model_refs": [
+        "EV-1"
+      ],
+      "test_point_ids": [
+        "TP-1"
+      ]
+    }
+  ],
+  "test_points": [
+    {
+      "tp_id": "TP-1",
+      "module_id": "MOD-1",
+      "priority": "P1",
+      "granularity": "atomic",
+      "preconditions": [
+        "The event is permitted by the confirmed rule."
+      ],
+      "mechanism": "Trigger the event and verify its business result.",
+      "core_expected": "The resulting object is readable with its original identifier.",
+      "affected_facts": [
+        "The resulting object is available."
+      ],
+      "must_not_change": [
+        "The original identifier."
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": [
+        "OBJ-1"
+      ],
+      "business_event_ids": [
+        "EV-1"
+      ],
+      "source_coverage_ids": [
+        "COV-1"
+      ],
+      "primary_coverage_id": "COV-1",
+      "source_status": "CONFIRMED",
+      "source_refs": [
+        "SRC-1"
+      ]
+    }
+  ],
+  "granularity_review": {
+    "status": "passed",
+    "overbroad_point_ids": [],
+    "data_instance_split_groups": []
+  },
+  "test_points_self_review": {
+    "status": "passed",
+    "coverage_accounted_for": true
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    }
+  },
+  "branch_design": {
+    "coverage_plan": [
+      {
+        "coverage_id": "COV-1",
+        "mode": "conditional",
+        "branch_ids": [
+          "B-allow",
+          "B-reject",
+          "B-fail",
+          "B-interleave"
+        ]
+      }
+    ],
+    "branches": [
+      {
+        "branch_id": "B-allow",
+        "coverage_ids": [
+          "COV-1"
+        ],
+        "test_point_ids": [
+          "TP-1"
+        ],
+        "claim_ids": [
+          "CL-1"
+        ],
+        "condition": "合法输入",
+        "expected_result": "创建有效业务请求",
+        "evidence_basis": "示例来源 SRC-1 及业务模型 EV-1（合成示例，非真实需求）",
+        "observable_fact": "核查最终业务请求存在性和所属版本",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "操作输入及处理阶段",
+          "data_condition": "准备满足「合法输入」的业务数据",
+          "oracle": "业务结果、版本绑定和失败保持事实，不只看前台提示",
+          "required_variations": [
+            "输入条件",
+            "状态条件"
+          ]
+        }
+      },
+      {
+        "branch_id": "B-reject",
+        "coverage_ids": [
+          "COV-1"
+        ],
+        "test_point_ids": [
+          "TP-1"
+        ],
+        "claim_ids": [
+          "CL-1"
+        ],
+        "condition": "无效输入",
+        "expected_result": "拒绝建立请求，既有对象保持不变",
+        "evidence_basis": "示例来源 SRC-1 及业务模型 EV-1（合成示例，非真实需求）",
+        "observable_fact": "核查最终业务请求存在性和所属版本",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "操作输入及处理阶段",
+          "data_condition": "准备满足「无效输入」的业务数据",
+          "oracle": "业务结果、版本绑定和失败保持事实，不只看前台提示",
+          "required_variations": [
+            "输入条件",
+            "状态条件"
+          ]
+        }
+      },
+      {
+        "branch_id": "B-fail",
+        "coverage_ids": [
+          "COV-1"
+        ],
+        "test_point_ids": [
+          "TP-1"
+        ],
+        "claim_ids": [
+          "CL-1"
+        ],
+        "condition": "处理过程中发生已定义的失败",
+        "expected_result": "标记失败而不能提供有效业务结果",
+        "evidence_basis": "示例来源 SRC-1 及业务模型 EV-1（合成示例，非真实需求）",
+        "observable_fact": "核查最终业务请求存在性和所属版本",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "操作输入及处理阶段",
+          "data_condition": "准备满足「处理过程中发生已定义的失败」的业务数据",
+          "oracle": "业务结果、版本绑定和失败保持事实，不只看前台提示",
+          "required_variations": [
+            "输入条件",
+            "状态条件"
+          ]
+        }
+      },
+      {
+        "branch_id": "B-interleave",
+        "coverage_ids": [
+          "COV-1"
+        ],
+        "test_point_ids": [
+          "TP-1"
+        ],
+        "claim_ids": [
+          "CL-1"
+        ],
+        "condition": "处理期间上层配置变更",
+        "expected_result": "进行中请求不应被新配置覆盖",
+        "evidence_basis": "示例来源 SRC-1 及业务模型 EV-1（合成示例，非真实需求）",
+        "observable_fact": "核查最终业务请求存在性和所属版本",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "操作输入及处理阶段",
+          "data_condition": "准备满足「处理期间上层配置变更」的业务数据",
+          "oracle": "业务结果、版本绑定和失败保持事实，不只看前台提示",
+          "required_variations": [
+            "输入条件",
+            "状态条件"
+          ]
+        }
+      }
+    ],
+    "claim_dispositions": [
+      {
+        "claim_id": "CL-1",
+        "decision": "covered",
+        "coverage_ids": [
+          "COV-1"
+        ]
+      },
+      {
+        "claim_id": "CL-OLD",
+        "decision": "excluded",
+        "coverage_ids": [],
+        "reason": "模拟的正式范围移除项，不进入现行验证预期"
+      }
+    ],
+    "discriminator_reviews": [
+      {
+        "discriminator_id": "DISC-1",
+        "status": "covered",
+        "branch_ids": [
+          "B-allow",
+          "B-reject"
+        ]
+      }
+    ],
+    "path_reviews": [
+      {
+        "path_id": "PATH-1",
+        "status": "covered",
+        "terminal_branch_ids": [
+          "B-allow",
+          "B-reject"
+        ],
+        "interruption_branch_ids": [
+          "B-fail"
+        ],
+        "interleaving_branch_ids": [
+          "B-interleave"
+        ]
+      }
+    ],
+    "retired_marker_reviews": []
+  }
+}

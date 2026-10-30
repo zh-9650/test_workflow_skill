@@ -5,6 +5,7 @@ from pathlib import Path
 SOURCE_STATUS = {"CONFIRMED", "DERIVED", "TEST_BASELINE", "PENDING", "IMPLEMENTATION_DETAIL"}
 UNKNOWN_CATEGORIES = {"blocking_business", "non_blocking_business", "implementation", "ui", "external_dependency"}
 UNKNOWN_STATUS = {"pending", "resolved", "out_of_scope"}
+RECOMMENDATION_STATUS = {"recommended", "not_recommended"}
 ISSUE_TYPES = {"missing_rule", "source_conflict", "scope", "ambiguous_behavior", "dependency", "implementation", "ui", "external_dependency"}
 SELF_CHECKS = {
     "scope_checked", "objects_checked", "states_checked", "relationships_checked",
@@ -29,6 +30,11 @@ COMPLETENESS_DIMENSIONS = {
     "data_consistency",
 }
 COMPLETENESS_STATUS = {"covered", "question_raised", "not_applicable"}
+# 3.1 makes explicit per-event lifecycle linkage a release gate; a blank list by
+# itself can no longer be mistaken for a completed applicability decision.
+MODEL_SCHEMA = "3.1"
+LINK_IMPACTS = {"change", "read_or_guard", "not_applicable", "pending"}
+
 
 
 def fail(path, msg):
@@ -123,7 +129,100 @@ def validate_presentation_sync(v):
             fail(f"presentation_sync.checks.{key}", "must be true")
 
 
-def validate(v, require_confirmed=True):
+def validate_mechanism_links(event, path, sm_ids, transition_ids, relationship_ids):
+    """Validate declared links, not the truth of a business interpretation.
+
+    State-changing events reference a modeled transition where available;
+    state reads/guards may reference a state machine.  A no-impact decision
+    needs a rationale; an unknown needs a business-question reference.
+    """
+    links = event.get("mechanism_links")
+    if not isinstance(links, dict):
+        fail(f"{path}.mechanism_links", "3.1 requires explicit state and relationship applicability")
+    pending = []
+    for dimension, allowed_refs, free_text_key in (
+        ("state", sm_ids | transition_ids, "state_changes"),
+        ("relationship", relationship_ids, "relationship_changes"),
+    ):
+        entry = links.get(dimension)
+        target = f"{path}.mechanism_links.{dimension}"
+        if not isinstance(entry, dict):
+            fail(target, "object required")
+        impact = entry.get("impact")
+        if impact not in LINK_IMPACTS:
+            fail(f"{target}.impact", f"must be one of {sorted(LINK_IMPACTS)}")
+        refs = entry.get("refs")
+        if not isinstance(refs, list) or any(not text(x) for x in refs):
+            fail(f"{target}.refs", "list of non-empty reference ids required")
+        if len(refs) != len(set(refs)):
+            fail(f"{target}.refs", "duplicate reference")
+        unknown = set(refs) - allowed_refs
+        if unknown:
+            fail(f"{target}.refs", f"unknown or wrong-type refs {sorted(unknown)}")
+        rationale = entry.get("rationale")
+        if not text(rationale):
+            fail(f"{target}.rationale", "describe what changes, is guarded, does not apply, or is unknown")
+        qids = entry.get("question_ids", [])
+        if not isinstance(qids, list) or any(not text(x) for x in qids):
+            fail(f"{target}.question_ids", "list of valid question ids required when present")
+        if impact in {"change", "read_or_guard"}:
+            if (not refs or not event[free_text_key]
+                    or any(not text(description) for description in event[free_text_key])):
+                fail(target, "impact requires both known mechanism refs and specific event behavior")
+            if qids:
+                fail(f"{target}.question_ids", "known mechanism cannot have pending applicability questions")
+            if dimension == "state" and impact == "change" and transition_ids and not (set(refs) & transition_ids):
+                # Creation can establish an initial state without a modeled
+                # transition; that exceptional classification must be explicit.
+                if not text(entry.get("transition_not_applicable_reason")):
+                    fail(f"{target}.refs", "state changes require a transition ID or a reason for direct initial-state assignment")
+        elif impact == "not_applicable":
+            if refs or event[free_text_key] or qids:
+                fail(target, "not_applicable must not claim change/guard evidence or pending questions")
+        else:  # pending
+            if not qids:
+                fail(f"{target}.question_ids", "pending applicability needs question ids")
+            if refs or event[free_text_key]:
+                fail(target, "pending applicability must not be asserted as an established change")
+            pending.append((target, qids))
+    return pending
+
+
+def validate_unlinked_mechanisms(v, state_machines, relationships, event_links, source_ids):
+    """Do not silently drop state machines or relationships from every event.
+
+    Legitimate context-only mechanisms can be explicitly excepted with an
+    evidence-backed reason; this does not prove the source claim is correct.
+    """
+    linked = set()
+    for links in event_links:
+        for dimension in ("state", "relationship"):
+            linked.update(links[dimension].get("refs", []))
+    exemptions = v.get("mechanism_link_exceptions")
+    if not isinstance(exemptions, list):
+        fail("mechanism_link_exceptions", "list required")
+    valid = ({x["state_machine_id"] for x in state_machines}
+             | {tr["transition_id"] for sm in state_machines for tr in sm["transitions"]}
+             | {x["relationship_id"] for x in relationships})
+    exempt_ids = ids(exemptions, "ref", "mechanism_link_exceptions") if exemptions else set()
+    if exempt_ids - valid:
+        fail("mechanism_link_exceptions", f"unknown model refs {sorted(exempt_ids - valid)}")
+    for i, item in enumerate(exemptions):
+        path = f"mechanism_link_exceptions[{i}]"
+        if not text(item.get("reason")):
+            fail(f"{path}.reason", "must explain why this mechanism is deliberately context-only")
+        require_source_refs(item, path, source_ids, required=True)
+        if item["ref"] in linked:
+            fail(f"{path}.ref", "cannot except a mechanism already linked from an event")
+    # A transition reference covers its state machine.
+    for sm in state_machines:
+        if any(tr["transition_id"] in linked for tr in sm["transitions"]):
+            linked.add(sm["state_machine_id"])
+    missing = valid - linked - exempt_ids
+    if missing:
+        fail("mechanism_links", f"state machines/transitions/relationships lack event linkage or evidence-backed exceptions: {sorted(missing)}")
+
+def validate(v, require_confirmed=True, allow_legacy_schema=False):
     """
     require_confirmed=False: validate a self-reviewed draft. Pending blocking decisions may remain,
     but they must be explicit and fully documented.
@@ -135,8 +234,10 @@ def validate(v, require_confirmed=True):
     """
     if not isinstance(v, dict):
         fail("business", "object required")
-    if not text(v.get("schema_version")):
-        fail("schema_version", "required")
+    version = v.get("schema_version")
+    legacy = version == "3.0"
+    if version != MODEL_SCHEMA and not (allow_legacy_schema and legacy):
+        fail("schema_version", "new Skill requires 3.1 with mechanism_links; old 3.0 may only be inspected using --allow-legacy-schema and cannot be released")
     if not text(v.get("model_version")):
         fail("model_version", "required")
 
@@ -249,6 +350,8 @@ def validate(v, require_confirmed=True):
         "relationship_changes", "downstream_impacts", "must_not_change",
         "failure_conditions", "failure_final_facts", "source_refs"
     )
+    pending_mechanism_questions = []
+    collected_mechanism_links = []
     for i, ev in enumerate(events):
         p = f"events[{i}]"
         if ev.get("module_id") not in module_ids:
@@ -265,6 +368,12 @@ def validate(v, require_confirmed=True):
         if ev["failure_conditions"] and not ev["failure_final_facts"]:
             fail(f"{p}.failure_final_facts", "required when failure_conditions exist")
         validate_source_status(ev, p, source_ids, allow_implementation=False)
+        if not legacy:
+            pending_mechanism_questions.extend(validate_mechanism_links(ev, p, sm_ids, transition_ids, relationship_ids))
+            collected_mechanism_links.append(ev["mechanism_links"])
+
+    if not legacy:
+        validate_unlinked_mechanisms(v, state_machines, relationships, collected_mechanism_links, source_ids)
 
     referenced_objects = set()
     referenced_events = set()
@@ -344,6 +453,46 @@ def validate(v, require_confirmed=True):
         validate_source_status(flow, p, source_ids, allow_implementation=False)
 
     all_model_refs = all_refs | flow_ids
+    mechanism_refs = event_ids | rule_ids | invariant_ids | flow_ids | transition_ids
+
+    capabilities = v.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        fail("capabilities", "list required")
+    cap_ids = ids(capabilities, "capability_id", "capabilities") if capabilities else set()
+    collision = cap_ids & all_model_refs
+    if collision:
+        fail("capabilities", f"capability_id collides with existing model id {sorted(collision)}")
+    for i, cap in enumerate(capabilities):
+        p = f"capabilities[{i}]"
+        if not text(cap.get("name")):
+            fail(f"{p}.name", "required")
+        applies = cap.get("applies_to_refs", [])
+        if not isinstance(applies, list) or not applies:
+            fail(f"{p}.applies_to_refs", "non-empty list required")
+        unknown = set(applies) - all_model_refs
+        if unknown:
+            fail(f"{p}.applies_to_refs", f"unknown refs {sorted(unknown)}")
+        if not (set(applies) & mechanism_refs):
+            fail(f"{p}.applies_to_refs", "at least one mechanism ref (event, rule, invariant, flow, or transition) required")
+        boundary = cap.get("proof_boundary")
+        if boundary is not None:
+            if not isinstance(boundary, dict):
+                fail(f"{p}.proof_boundary", "object required")
+            facts = boundary.get("substantive_facts", [])
+            traps = boundary.get("superficial_traps", [])
+            if not isinstance(facts, list) or not isinstance(traps, list):
+                fail(f"{p}.proof_boundary", "substantive_facts and superficial_traps must be lists")
+            if not facts or not traps:
+                fail(f"{p}.proof_boundary", "substantive_facts and superficial_traps must be non-empty paired lists")
+            for f_idx, fact in enumerate(facts):
+                if not isinstance(fact, str) or not fact.strip():
+                    fail(f"{p}.proof_boundary.substantive_facts[{f_idx}]", "non-empty string required")
+            for t_idx, trap in enumerate(traps):
+                if not isinstance(trap, str) or not trap.strip():
+                    fail(f"{p}.proof_boundary.superficial_traps[{t_idx}]", "non-empty string required")
+        require_source_refs(cap, p, source_ids, required=False)
+
+    all_model_refs |= cap_ids
 
     unknowns = v.get("unknowns", [])
     if not isinstance(unknowns, list):
@@ -389,24 +538,43 @@ def validate(v, require_confirmed=True):
                 mode = q.get("answer_mode", "choice")
                 if mode not in {"choice", "open"}:
                     fail(f"{p}.answer_mode", "must be choice or open")
+                rec_status = q.get("recommendation_status", "recommended")
+                if rec_status not in RECOMMENDATION_STATUS:
+                    fail(f"{p}.recommendation_status", f"must be one of {sorted(RECOMMENDATION_STATUS)}")
                 if not text(q.get("recommendation_reason")):
                     fail(f"{p}.recommendation_reason", "pending business question requires recommendation reason")
-                if mode == "choice":
-                    options = q.get("options")
-                    if not isinstance(options, list) or len(options) < 2:
-                        fail(f"{p}.options", "choice question requires at least two options")
-                    option_ids = []
-                    for j, opt in enumerate(options):
-                        if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
-                            fail(f"{p}.options[{j}]", "option_id and description required")
-                        if not text(opt.get("impact")):
-                            fail(f"{p}.options[{j}].impact", "required")
-                        option_ids.append(opt["option_id"])
-                    if q.get("recommended_option") not in option_ids:
-                        fail(f"{p}.recommended_option", "must reference one option")
+
+                if rec_status == "not_recommended":
+                    if q.get("recommended_option") is not None:
+                        fail(f"{p}.recommended_option", "must not provide recommended_option when recommendation_status is not_recommended")
+                    if q.get("recommended_answer") is not None:
+                        fail(f"{p}.recommended_answer", "must not provide recommended_answer when recommendation_status is not_recommended")
+                    if mode == "choice":
+                        options = q.get("options")
+                        if not isinstance(options, list) or len(options) < 2:
+                            fail(f"{p}.options", "choice question requires at least two options")
+                        for j, opt in enumerate(options):
+                            if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
+                                fail(f"{p}.options[{j}]", "option_id and description required")
+                            if not text(opt.get("impact")):
+                                fail(f"{p}.options[{j}].impact", "required")
                 else:
-                    if not text(q.get("recommended_answer")):
-                        fail(f"{p}.recommended_answer", "open question requires recommended_answer")
+                    if mode == "choice":
+                        options = q.get("options")
+                        if not isinstance(options, list) or len(options) < 2:
+                            fail(f"{p}.options", "choice question requires at least two options")
+                        option_ids = []
+                        for j, opt in enumerate(options):
+                            if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
+                                fail(f"{p}.options[{j}]", "option_id and description required")
+                            if not text(opt.get("impact")):
+                                fail(f"{p}.options[{j}].impact", "required")
+                            option_ids.append(opt["option_id"])
+                        if q.get("recommended_option") not in option_ids:
+                            fail(f"{p}.recommended_option", "must reference one option")
+                    else:
+                        if not text(q.get("recommended_answer")):
+                            fail(f"{p}.recommended_answer", "open question requires recommended_answer")
             if q.get("status") == "resolved" and not text(q.get("answer")):
                 fail(f"{p}.answer", "resolved business question requires answer")
 
@@ -415,6 +583,15 @@ def validate(v, require_confirmed=True):
                 fail(f"{p}.affected_scopes", "blocking expected-affecting unknown needs affected scopes")
             pending_blocking_scopes.update(scopes)
             pending_blocking_ids.add(q["unknown_id"])
+
+    if not legacy:
+        question_map = {q["unknown_id"]: q for q in unknowns}
+        for ref_path, qids in pending_mechanism_questions:
+            missing = set(qids) - unknown_ids
+            if missing:
+                fail(f"{ref_path}.question_ids", f"unknown questions {sorted(missing)}")
+            if any(question_map[qid]["status"] != "pending" for qid in qids):
+                fail(f"{ref_path}.question_ids", "pending mechanism must point to pending questions")
 
     for i, q in enumerate(unknowns):
         depends_on = q.get("depends_on", [])
@@ -496,25 +673,36 @@ def validate(v, require_confirmed=True):
 
     return {
         "ok": True,
+        "schema_validation": "legacy-inspection-only" if legacy else "3.1-typed-mechanism-links",
+        "legacy_schema": legacy,
         "model_version": v["model_version"],
         "modules": len(modules),
         "objects": len(objects),
         "state_machines": len(state_machines),
         "relationships": len(relationships),
         "events": len(events),
+        "capabilities": len(capabilities),
         "invariants": len(invariants),
         "flows": len(flows),
         "unknowns": len(unknowns),
         "pending_blocking_questions": sorted(pending_blocking_ids),
         "blocked_scopes": sorted(blocked),
-        "ready_for_confirmation": not pending_blocking_ids,
+        "ready_for_confirmation": not pending_blocking_ids and not legacy,
     }
 
 
 if __name__ == "__main__":
+    import sys
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", required=True)
     parser.add_argument("--allow-waiting-confirmation", action="store_true")
+    parser.add_argument("--allow-legacy-schema", action="store_true", help="Inspect schema 3.0 only; it cannot pass the new release gate")
     args = parser.parse_args()
-    data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    print(json.dumps(validate(data, require_confirmed=not args.allow_waiting_confirmation), ensure_ascii=False, indent=2))
+    try:
+        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        result = validate(data, require_confirmed=not args.allow_waiting_confirmation,
+                          allow_legacy_schema=args.allow_legacy_schema)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    except (AssertionError, ValueError, OSError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+        sys.exit(1)

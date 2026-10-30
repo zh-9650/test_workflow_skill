@@ -1,0 +1,277 @@
+{
+  "schema_version": "1.2.0",
+  "source_case_design_version": "CD-PHASE5-SYN-01",
+  "cases": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "title": "Create valid item｜Single isolated synthetic request; first invocation follows formal script execution.",
+      "priority": "P1",
+      "case_type": "ordinary",
+      "tp_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "branch_ids": [
+        "BR-SYN-1"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "data": {
+        "actors": [
+          "授权合成测试账户"
+        ],
+        "objects": [
+          "业务实体 1"
+        ],
+        "initial_facts": [
+          "测试账户拥有 1 权限"
+        ],
+        "decisive_values": [
+          "实体标识 1"
+        ],
+        "setup_approach": "通过独立合成夹具创建业务实体",
+        "readiness_check": "调用读回接口核对实体1状态",
+        "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+      },
+      "data_values": [
+        "fixture=\"local-memory-catalog\"",
+        "shared_item_id=\"item-phase5-b01\"",
+        "name=\"Phase5 Item\""
+      ],
+      "steps": [
+        {
+          "id": "S1",
+          "action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item",
+          "checks": [
+            {
+              "id": "A-TC-API-CREATE-VALID",
+              "checkpoint": "final",
+              "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+              "oracle_type": "exact",
+              "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+              "observed_fact": "接口返回业务实体 1 及 id",
+              "decision_rule": "根据唯一标识与取值规则验收 1",
+              "evidence_collection": "记录脱敏请求响应与业务数据读回",
+              "tp_ids": [
+                "TP-CREATE-VALID"
+              ]
+            }
+          ]
+        }
+      ],
+      "final_assertions": [
+        {
+          "id": "A-TC-API-CREATE-VALID",
+          "checkpoint": "final",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 1 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 1",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-CREATE-VALID"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "A-TC-API-CREATE-VALID",
+          "checkpoint": "final",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 1 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 1",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-CREATE-VALID"
+          ]
+        }
+      ],
+      "cleanup": "每个实例使用不同标识，执行后隔离清理",
+      "design_status": "design_ready",
+      "dependency": ""
+    },
+    {
+      "case_id": "TC-API-READ-ISOLATED",
+      "title": "Read isolated control item｜Single isolated synthetic request; first invocation follows formal script execution.",
+      "priority": "P1",
+      "case_type": "ordinary",
+      "tp_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "branch_ids": [
+        "BR-SYN-2"
+      ],
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "data": {
+        "actors": [
+          "授权合成测试账户"
+        ],
+        "objects": [
+          "业务实体 2"
+        ],
+        "initial_facts": [
+          "测试账户拥有 2 权限"
+        ],
+        "decisive_values": [
+          "实体标识 2"
+        ],
+        "setup_approach": "通过独立合成夹具创建业务实体",
+        "readiness_check": "调用读回接口核对实体2状态",
+        "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+      },
+      "data_values": [
+        "fixture=\"local-memory-catalog\"",
+        "preseeded_control_id=\"control-001\""
+      ],
+      "steps": [
+        {
+          "id": "S1",
+          "action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)",
+          "checks": [
+            {
+              "id": "A-TC-API-READ-ISOLATED",
+              "checkpoint": "final",
+              "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+              "oracle_type": "exact",
+              "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+              "observed_fact": "接口返回业务实体 2 及 id",
+              "decision_rule": "根据唯一标识与取值规则验收 2",
+              "evidence_collection": "记录脱敏请求响应与业务数据读回",
+              "tp_ids": [
+                "TP-READ-ISOLATED"
+              ]
+            }
+          ]
+        }
+      ],
+      "final_assertions": [
+        {
+          "id": "A-TC-API-READ-ISOLATED",
+          "checkpoint": "final",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 2 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 2",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-READ-ISOLATED"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "A-TC-API-READ-ISOLATED",
+          "checkpoint": "final",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 2 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 2",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-READ-ISOLATED"
+          ]
+        }
+      ],
+      "cleanup": "每个实例使用不同标识，执行后隔离清理",
+      "design_status": "design_ready",
+      "dependency": ""
+    },
+    {
+      "case_id": "TC-API-CREATE-RECOVER",
+      "title": "Read B01 regression-created item after repair｜独立准备 item-phase5-b01 后验证恢复可读；不依赖其他用例 PASS",
+      "priority": "P1",
+      "case_type": "ordinary",
+      "tp_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "branch_ids": [
+        "BR-SYN-3"
+      ],
+      "preconditions": [
+        "在本用例中独立通过已验证的合法夹具创建 item-phase5-b01 并核验已存在；不得依赖其他用例执行。"
+      ],
+      "data": {
+        "actors": [
+          "授权合成测试账户"
+        ],
+        "objects": [
+          "业务实体 3"
+        ],
+        "initial_facts": [
+          "测试账户拥有 3 权限"
+        ],
+        "decisive_values": [
+          "实体标识 3"
+        ],
+        "setup_approach": "本用例独立创建 item-phase5-b01 并确认初始化成功，不依赖任何其他测试用例",
+        "readiness_check": "运行本用例前读回 item-phase5-b01，确认名称 Phase5 Item 与目标业务状态",
+        "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+      },
+      "data_values": [
+        "fixture=\"local-memory-catalog\"",
+        "shared_item_id=\"item-phase5-b01\""
+      ],
+      "steps": [
+        {
+          "id": "S1",
+          "action": "GET /api/items/item-phase5-b01，读取本用例准备的对象并核对身份与名称",
+          "checks": [
+            {
+              "id": "A-TC-API-CREATE-RECOVER",
+              "checkpoint": "final",
+              "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching this case’s verified fixture",
+              "oracle_type": "exact",
+              "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+              "observed_fact": "接口返回业务实体 3 及 id",
+              "decision_rule": "根据唯一标识与取值规则验收 3",
+              "evidence_collection": "记录脱敏请求响应与业务数据读回",
+              "tp_ids": [
+                "TP-CREATE-RECOVER"
+              ]
+            }
+          ]
+        }
+      ],
+      "final_assertions": [
+        {
+          "id": "A-TC-API-CREATE-RECOVER",
+          "checkpoint": "final",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching this case’s verified fixture",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 3 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 3",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-CREATE-RECOVER"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "A-TC-API-CREATE-RECOVER",
+          "checkpoint": "final",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching this case’s verified fixture",
+          "oracle_type": "exact",
+          "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+          "observed_fact": "接口返回业务实体 3 及 id",
+          "decision_rule": "根据唯一标识与取值规则验收 3",
+          "evidence_collection": "记录脱敏请求响应与业务数据读回",
+          "tp_ids": [
+            "TP-CREATE-RECOVER"
+          ]
+        }
+      ],
+      "cleanup": "每个实例使用不同标识，执行后隔离清理",
+      "design_status": "design_ready",
+      "dependency": ""
+    }
+  ]
+}

@@ -3,6 +3,11 @@ name: test-project-bootstrap
 description: Initialize or refresh the testing workflow entrypoints (CLAUDE.md and AGENTS.md) for an explicitly selected project before a test Run. Preserve project-authored instructions while installing the managed testing blocks, project testing index, profile, agent definitions, defect platform default mapping, and TypeScript runtime skeleton including Jev adapter.
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Project Bootstrap｜项目测试入口初始化
 
 仅在用户明确指定目标项目并开始接入测试流程，或 Router 检测到该项目 Bootstrap 缺失、版本漂移、托管区块失效时使用。当前仓库开发和临时验收可在临时项目运行；未经用户确认，不对真实业务项目执行。

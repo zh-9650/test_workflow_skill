@@ -1,0 +1,6 @@
+interface:
+  display_name: "Project Operations"
+  short_description: "Reuse verified semantic operations across test runs"
+  default_prompt: "Use $project-operations to find or update a reusable operation asset for this test Run."
+policy:
+  allow_implicit_invocation: true

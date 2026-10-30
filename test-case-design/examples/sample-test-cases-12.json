@@ -1,0 +1,449 @@
+{
+  "schema_version": "2.0.0",
+  "case_design_version": "CD-PHASE5-SYN-01",
+  "test_point_version": "TP-PHASE5-SYN-01",
+  "business_model_version": "BM-PHASE5-SYN-01",
+  "review_questions": [],
+  "expansion_records": [
+    {
+      "tp_id": "TP-CREATE-VALID",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-CREATE-VALID"
+      ]
+    },
+    {
+      "tp_id": "TP-READ-ISOLATED",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-READ-ISOLATED"
+      ]
+    },
+    {
+      "tp_id": "TP-CREATE-RECOVER",
+      "strategy": "direct",
+      "rationale": "Each mechanism is a separate deterministic scenario with no parameter matrix.",
+      "execution_instance_ids": [
+        "I-TC-API-CREATE-RECOVER"
+      ]
+    }
+  ],
+  "case_templates": [
+    {
+      "case_id": "TC-API-CREATE-VALID",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Create valid item",
+      "target_action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "POST /api/items with id=item-phase5-b01 and name=Phase5 Item"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-CREATE-VALID",
+          "checkpoint": "final",
+          "expected": "201 response contains id=item-phase5-b01 and name=Phase5 Item",
+          "test_point_ids": [
+            "TP-CREATE-VALID"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-VALID"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    },
+    {
+      "case_id": "TC-API-READ-ISOLATED",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Read isolated control item",
+      "target_action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "Use isolated synthetic local HTTP fixture; no external services."
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/control-001 (read pre-seeded fixture control; no write)"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-READ-ISOLATED",
+          "checkpoint": "final",
+          "expected": "200 response contains id=control-001 and the pre-seeded control name; no catalog state changes",
+          "test_point_ids": [
+            "TP-READ-ISOLATED"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-READ-ISOLATED"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    },
+    {
+      "case_id": "TC-API-CREATE-RECOVER",
+      "case_type": "ordinary",
+      "priority": "P1",
+      "title": "Read B01 regression-created item after repair",
+      "target_action": "GET /api/items/item-phase5-b01 after reviewer-confirmed B01 Regression PASS",
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "preconditions_applicable": true,
+      "preconditions": [
+        "在本用例中独立通过已验证的合法夹具创建 item-phase5-b01 并核验已存在；不得依赖其他用例执行。"
+      ],
+      "steps": [
+        {
+          "step_id": "S1",
+          "action": "GET /api/items/item-phase5-b01，读取本用例准备的对象并核对身份与名称"
+        }
+      ],
+      "assertions": [
+        {
+          "assertion_id": "A-TC-API-CREATE-RECOVER",
+          "checkpoint": "final",
+          "expected": "200 response returns id=item-phase5-b01 and name=Phase5 Item, matching this case’s verified fixture",
+          "test_point_ids": [
+            "TP-CREATE-RECOVER"
+          ]
+        }
+      ],
+      "evidence_policy": {
+        "level": "standard",
+        "recording_required": false,
+        "required": [
+          {
+            "kind": "request_response",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ],
+            "redacted": true
+          },
+          {
+            "kind": "runner_report",
+            "assertion_ids": [
+              "A-TC-API-CREATE-RECOVER"
+            ]
+          }
+        ]
+      },
+      "verification_dimensions": [
+        "operation_result",
+        "data"
+      ]
+    }
+  ],
+  "execution_instances": [
+    {
+      "instance_id": "I-TC-API-CREATE-VALID",
+      "case_id": "TC-API-CREATE-VALID",
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ],
+      "variation": "Single isolated synthetic request; first invocation follows formal script execution.",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01",
+        "name": "Phase5 Item"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-CREATE-VALID"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    },
+    {
+      "instance_id": "I-TC-API-READ-ISOLATED",
+      "case_id": "TC-API-READ-ISOLATED",
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ],
+      "variation": "Single isolated synthetic request; first invocation follows formal script execution.",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "preseeded_control_id": "control-001"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-READ-ISOLATED"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    },
+    {
+      "instance_id": "I-TC-API-CREATE-RECOVER",
+      "case_id": "TC-API-CREATE-RECOVER",
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ],
+      "variation": "独立准备 item-phase5-b01 后验证恢复可读；不依赖其他用例 PASS",
+      "test_data": {
+        "fixture": "local-memory-catalog",
+        "shared_item_id": "item-phase5-b01"
+      },
+      "expected_assertion_ids": [
+        "A-TC-API-CREATE-RECOVER"
+      ],
+      "result_tracking": {
+        "independent": true
+      }
+    }
+  ],
+  "test_cases_self_review": {
+    "status": "passed",
+    "point_coverage_complete": true,
+    "instance_coverage_complete": true,
+    "assertion_mapping_complete": true,
+    "failure_masking_checked": true,
+    "parameterization_checked": true,
+    "complex_cases_checked": true,
+    "no_unresolved_expected": true
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    }
+  },
+  "case_quality_design": {
+    "schema_version": "1.0",
+    "branch_instances": [
+      {
+        "branch_id": "BR-SYN-1",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-CREATE-VALID"
+        ],
+        "assertion_refs": [
+          {
+            "instance_id": "I-TC-API-CREATE-VALID",
+            "assertion_id": "A-TC-API-CREATE-VALID"
+          }
+        ],
+        "condition_preserved": "实例 I-TC-API-CREATE-VALID 单独准备条件 1",
+        "result_discriminator": "断言 A-TC-API-CREATE-VALID 明确检查结果 1"
+      },
+      {
+        "branch_id": "BR-SYN-2",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-READ-ISOLATED"
+        ],
+        "assertion_refs": [
+          {
+            "instance_id": "I-TC-API-READ-ISOLATED",
+            "assertion_id": "A-TC-API-READ-ISOLATED"
+          }
+        ],
+        "condition_preserved": "实例 I-TC-API-READ-ISOLATED 单独准备条件 2",
+        "result_discriminator": "断言 A-TC-API-READ-ISOLATED 明确检查结果 2"
+      },
+      {
+        "branch_id": "BR-SYN-3",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-CREATE-RECOVER"
+        ],
+        "assertion_refs": [
+          {
+            "instance_id": "I-TC-API-CREATE-RECOVER",
+            "assertion_id": "A-TC-API-CREATE-RECOVER"
+          }
+        ],
+        "condition_preserved": "实例 I-TC-API-CREATE-RECOVER 单独准备条件 3",
+        "result_discriminator": "断言 A-TC-API-CREATE-RECOVER 明确检查结果 3"
+      }
+    ],
+    "variation_reviews": [
+      {
+        "branch_id": "BR-SYN-1",
+        "variation": "条件型变体 1",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-CREATE-VALID"
+        ],
+        "distinguishing_data": "合成数据 1 的决定条件不同",
+        "expected_difference": "执行 I-TC-API-CREATE-VALID 得到业务结果 1"
+      },
+      {
+        "branch_id": "BR-SYN-2",
+        "variation": "条件型变体 2",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-READ-ISOLATED"
+        ],
+        "distinguishing_data": "合成数据 2 的决定条件不同",
+        "expected_difference": "执行 I-TC-API-READ-ISOLATED 得到业务结果 2"
+      },
+      {
+        "branch_id": "BR-SYN-3",
+        "variation": "条件型变体 3",
+        "status": "covered",
+        "instance_ids": [
+          "I-TC-API-CREATE-RECOVER"
+        ],
+        "distinguishing_data": "合成数据 3 的决定条件不同",
+        "expected_difference": "执行 I-TC-API-CREATE-RECOVER 得到业务结果 3"
+      }
+    ],
+    "path_case_reviews": [],
+    "instance_readiness": [
+      {
+        "instance_id": "I-TC-API-CREATE-VALID",
+        "design_status": "design_ready",
+        "data_contract": {
+          "actors": [
+            "授权合成测试账户"
+          ],
+          "objects": [
+            "业务实体 1"
+          ],
+          "initial_facts": [
+            "测试账户拥有 1 权限"
+          ],
+          "decisive_values": [
+            "实体标识 1"
+          ],
+          "setup_approach": "通过独立合成夹具创建业务实体",
+          "readiness_check": "调用读回接口核对实体1状态",
+          "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+        },
+        "oracle_contracts": [
+          {
+            "assertion_id": "A-TC-API-CREATE-VALID",
+            "oracle_type": "exact",
+            "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+            "observed_fact": "接口返回业务实体 1 及 id",
+            "decision_rule": "根据唯一标识与取值规则验收 1",
+            "evidence_collection": "记录脱敏请求响应与业务数据读回"
+          }
+        ]
+      },
+      {
+        "instance_id": "I-TC-API-READ-ISOLATED",
+        "design_status": "design_ready",
+        "data_contract": {
+          "actors": [
+            "授权合成测试账户"
+          ],
+          "objects": [
+            "业务实体 2"
+          ],
+          "initial_facts": [
+            "测试账户拥有 2 权限"
+          ],
+          "decisive_values": [
+            "实体标识 2"
+          ],
+          "setup_approach": "通过独立合成夹具创建业务实体",
+          "readiness_check": "调用读回接口核对实体2状态",
+          "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+        },
+        "oracle_contracts": [
+          {
+            "assertion_id": "A-TC-API-READ-ISOLATED",
+            "oracle_type": "exact",
+            "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+            "observed_fact": "接口返回业务实体 2 及 id",
+            "decision_rule": "根据唯一标识与取值规则验收 2",
+            "evidence_collection": "记录脱敏请求响应与业务数据读回"
+          }
+        ]
+      },
+      {
+        "instance_id": "I-TC-API-CREATE-RECOVER",
+        "design_status": "design_ready",
+        "data_contract": {
+          "actors": [
+            "授权合成测试账户"
+          ],
+          "objects": [
+            "业务实体 3"
+          ],
+          "initial_facts": [
+            "测试账户拥有 3 权限"
+          ],
+          "decisive_values": [
+            "实体标识 3"
+          ],
+          "setup_approach": "本用例独立创建 item-phase5-b01 并确认初始化成功，不依赖任何其他测试用例",
+          "readiness_check": "运行本用例前读回 item-phase5-b01，确认名称 Phase5 Item 与目标业务状态",
+          "isolation_cleanup": "每个实例使用不同标识，执行后隔离清理"
+        },
+        "oracle_contracts": [
+          {
+            "assertion_id": "A-TC-API-CREATE-RECOVER",
+            "oracle_type": "exact",
+            "basis": "合成静态产品约束（演示，不构成真实业务依据）",
+            "observed_fact": "接口返回业务实体 3 及 id",
+            "decision_rule": "根据唯一标识与取值规则验收 3",
+            "evidence_collection": "记录脱敏请求响应与业务数据读回"
+          }
+        ]
+      }
+    ],
+    "discriminator_case_reviews": []
+  }
+}

@@ -3,6 +3,11 @@ name: test-defect-handling
 description: Turn reviewer-confirmed product issues from Runtime into high-quality defects and close the fix/regression loop. 仅在 Runtime 已排除明显脚本、Locator、数据和环境问题且独立 Reviewer 确认疑似产品问题后使用。负责稳定复现、最小合法路径、重复 Bug 检查、同根因聚合、Bug 自审/提交、关联 Case/Batch、修复后的新 Regression Worker 及必要影响范围回归。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Test Defect Handling｜缺陷与回归
 
 定位：

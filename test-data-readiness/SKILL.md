@@ -3,6 +3,11 @@ name: test-data-readiness
 description: Prepare and verify prerequisite data for the single Batch that is about to execute. 仅在执行方案已确认、Router 指定当前 Batch 后使用。根据计划中的数据需求，用合法业务路径准备本 Batch 数据；API 优先、UI 兜底，不使用 SQL 直接造业务数据；创建后必须 read-back 并验证状态、关系和账号可访问性。不要重新分 Batch、选择 UI/API 或修改 Case。
 ---
 
+## 项目知识协作入口
+
+处理具体项目工作前，读取 [项目知识读取与沉淀协议](../clarify-before-testing/references/project-knowledge-protocol.md)。该协议覆盖已有项目背景、非 Skill 材料接收、测试线选择和公共能力复用；本阶段职责仍由下文规定。
+
+
 # Test Data Readiness｜当前 Batch 数据准备
 
 职责只有一个：

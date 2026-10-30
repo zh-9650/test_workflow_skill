@@ -1,0 +1,79 @@
+{
+  "$comment": "最小范例：使用时必须替换为当前业务的原件证据与实际事件ID；不可照抄结论",
+  "model_version": "CURRENT-RUN-VERSION",
+  "clauses": [
+    {
+      "id": "SRC-001-A",
+      "original_ref": "PRD-1",
+      "source": "需求规格书",
+      "source_location": "§2.1 子句一",
+      "atomic_claim": "合法请求进入处理",
+      "scope": "active",
+      "current_expected": "受理并生成可跟踪的任务",
+      "model_refs": [
+        "EV-001"
+      ],
+      "decision_key": "submission.valid"
+    },
+    {
+      "id": "SRC-001-B",
+      "original_ref": "PRD-1",
+      "source": "需求规格书",
+      "source_location": "§2.1 子句二",
+      "atomic_claim": "历史手动确认入口",
+      "scope": "excluded",
+      "authority": "经批准的需求变更",
+      "authority_location": "正式裁定 §1",
+      "model_refs": []
+    }
+  ],
+  "critical_paths": [
+    {
+      "id": "PATH-1",
+      "task": "用户完成一个请求",
+      "high_risk": true,
+      "clause_refs": [
+        "SRC-001-A"
+      ],
+      "steps": [
+        {
+          "event_ref": "EV-001",
+          "when": "输入合法且用户有权限",
+          "then": "创建新业务请求",
+          "must_hold": "其他请求的结果保持隔离"
+        }
+      ],
+      "interruptions": [
+        {
+          "when": "在途失败",
+          "then": "标记失败；失败展示的具体表现以本项目规则为准"
+        }
+      ],
+      "interleavings": [
+        "如存在版本变更，记录旧请求和新请求的有效版本；没有证据则留问题"
+      ],
+      "terminal_outcome": "获得有效完成结果或进入有出处的失败终态"
+    }
+  ],
+  "discriminators": [
+    {
+      "id": "D-1",
+      "confidence": "confirmed",
+      "clause_refs": [
+        "SRC-001-A"
+      ],
+      "condition_a": "有效输入",
+      "condition_b": "无效输入",
+      "outcome_a": "受理",
+      "outcome_b": "拒绝",
+      "oracle": "源 §2.1 的后端准入条件与实际业务任务存在性"
+    }
+  ],
+  "retired_markers": [
+    {
+      "id": "OLD-1",
+      "text": "历史手动确认入口"
+    }
+  ],
+  "reviewed_flags": []
+}

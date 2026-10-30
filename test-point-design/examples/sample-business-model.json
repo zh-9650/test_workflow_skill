@@ -1,0 +1,23 @@
+{
+  "model_version": "business-v1",
+  "modules": [
+    {
+      "module_id": "MOD-1"
+    }
+  ],
+  "business_objects": [
+    {
+      "object_id": "OBJ-1"
+    }
+  ],
+  "events": [
+    {
+      "event_id": "EV-1"
+    }
+  ],
+  "source_registry": [
+    {
+      "source_id": "SRC-1"
+    }
+  ]
+}

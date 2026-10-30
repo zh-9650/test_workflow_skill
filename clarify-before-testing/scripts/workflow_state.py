@@ -60,17 +60,10 @@ def init(run_dir,run_id):
        'final_review_status':None,'final_review_source':None,'current_design_subphase':None,'updated_at':now()}
     write(r/'internal/state/run-status.json',s); return s
 
-def discover(root):
-    root=Path(root); rows=[]
-    if not root.exists(): return {'status':'none','runs':[]}
-    for state_path in sorted(root.glob('*/internal/state/run-status.json')):
-        try: s=read(state_path)
-        except Exception: continue
-        rows.append({'run_id':s.get('run_id'),'stage':s.get('current_stage'),'updated_at':s.get('updated_at'),'state_path':str(state_path),'run_dir':str(state_path.parents[2])})
-    active=[r for r in rows if r['stage']!='closed']
-    if len(active)==1: return {'status':'selected','run':active[0],'runs':rows}
-    if not active: return {'status':'none_active','runs':rows}
-    return {'status':'ambiguous','candidates':sorted(active,key=lambda x:x.get('updated_at') or '',reverse=True),'runs':rows}
+def discover(project_root, line=None):
+    adapter = _load_module(Path(__file__).with_name('project_context.py'), 'project_context_adapter')
+    return adapter.query(project_root, 'discover', line=line)
+
 
 def set_flag(path,key,value=True):
     fail('set_flag','review, confirmation, and data-readiness flags cannot be set directly; use the artifact or Batch-data binding commands')
@@ -727,7 +720,7 @@ def record_deployment_verified(state_path,target_env,deployment_version,verifica
 def main():
     a=argparse.ArgumentParser(); sp=a.add_subparsers(dest='cmd',required=True)
     p=sp.add_parser('init'); p.add_argument('--run-dir',required=True); p.add_argument('--run-id',required=True)
-    p=sp.add_parser('discover'); p.add_argument('--root',default='work/test-runs')
+    p=sp.add_parser('discover'); p.add_argument('--project-root',default='.'); p.add_argument('--line')
     p=sp.add_parser('transition'); p.add_argument('--state',required=True); p.add_argument('--stage',required=True); p.add_argument('--next',required=True); p.add_argument('--batch'); p.add_argument('--case'); p.add_argument('--return-reason')
     p=sp.add_parser('set-flag'); p.add_argument('--state',required=True); p.add_argument('--key',required=True); p.add_argument('--value',choices=['true','false'],default='true')
     p=sp.add_parser('set-batch-data-ready'); p.add_argument('--state',required=True); p.add_argument('--batch',required=True); p.add_argument('--manifest',required=True)
@@ -741,7 +734,7 @@ def main():
     p=sp.add_parser('show'); p.add_argument('--state',required=True)
     x=a.parse_args()
     if x.cmd=='init': v=init(x.run_dir,x.run_id)
-    elif x.cmd=='discover': v=discover(x.root)
+    elif x.cmd=='discover': v=discover(x.project_root,x.line)
     elif x.cmd=='transition': v=transition(x.state,x.stage,x.next,x.batch,x.case,x.return_reason)
     elif x.cmd=='set-flag': v=set_flag(x.state,x.key,x.value=='true')
     elif x.cmd=='set-batch-data-ready': v=set_batch_data_ready(x.state,x.batch,x.manifest)

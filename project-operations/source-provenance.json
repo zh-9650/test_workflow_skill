@@ -1,0 +1,54 @@
+{
+  "origin": "C:\\Users\\17381\\.codex\\skills\\project-operations",
+  "status": "source-adopted-installation-unchanged",
+  "files": [
+    {
+      "path": "SKILL.md",
+      "sha256": "e6a59225b02a8af83511948c941d73feae8aee2fd6a00976b768e0af385a12b9"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "sha256": "7f0600ae8e0a5d7ac7e57cb8760fb4a7d7785b5eb830e12dc766b8c8dd667308"
+    },
+    {
+      "path": "references/knowledge-settlement.md",
+      "sha256": "c693b8c2e2480707400a976be35bf0d97faeb619fff1cd88c0a9b066f8e5e4eb"
+    },
+    {
+      "path": "references/operation-asset-contract.md",
+      "sha256": "2defbac49120c0f7509dd11fdb018c49c8d0de7566666c6f5e9d6128cb7f95ae"
+    },
+    {
+      "path": "scripts/asset_registry.py",
+      "sha256": "23cdb0e73520a67f4b4ce7a2ef339a480a945f3c73c1936fef67202cb81ca212"
+    },
+    {
+      "path": "scripts/operation_assets.py",
+      "sha256": "7376f9f026aa3118f5f8a297d1072c674e1171a2a360290a29c754116f19e56b"
+    },
+    {
+      "path": "scripts/shared_learning.py",
+      "sha256": "e3cb006c0d0c3da04b49a50bbddcc1794ee3ddfe554a5fb9a92767757102023a"
+    },
+    {
+      "path": "scripts/skill_improvement.py",
+      "sha256": "5ede11171f5c873f4759630a687b2b5333ede21d1dfe92284efad063ac2ee874"
+    },
+    {
+      "path": "tests/test_asset_registry.py",
+      "sha256": "4ab848b1fee142e7e32975ca55d80aadb65583182db8c6b74bd459b86f5646cf"
+    },
+    {
+      "path": "tests/test_operation_assets.py",
+      "sha256": "9e4b7f861866bea856603b432857de8fcc94861638283f4cbed72fb4a4187f7d"
+    },
+    {
+      "path": "tests/test_shared_learning.py",
+      "sha256": "4c0d3b49be2ffe822d8b71608a9e0ad58cde53494ba9e31d538f786c021530eb"
+    },
+    {
+      "path": "tests/test_skill_improvement.py",
+      "sha256": "12ec0b036e79ee06c03b1901fc522a72a403d0904dbdaf9e7cea271f33705ff0"
+    }
+  ]
+}

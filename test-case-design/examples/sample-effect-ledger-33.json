@@ -1,0 +1,28 @@
+{
+  "model_version": "BM-PHASE5-SYN-01",
+  "clauses": [
+    {
+      "id": "CLAIM-SYN-1",
+      "scope": "active",
+      "atomic_claim": "合成业务规则 1"
+    },
+    {
+      "id": "CLAIM-SYN-2",
+      "scope": "active",
+      "atomic_claim": "合成业务规则 2"
+    },
+    {
+      "id": "CLAIM-SYN-3",
+      "scope": "active",
+      "atomic_claim": "合成业务规则 3"
+    },
+    {
+      "id": "CLAIM-OLD",
+      "scope": "excluded",
+      "atomic_claim": "旧功能已取消"
+    }
+  ],
+  "discriminators": [],
+  "critical_paths": [],
+  "retired_markers": []
+}

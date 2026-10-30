@@ -15,6 +15,7 @@ PRIORITIES = {"P0", "P1", "P2"}
 SOURCE_STATUS = {"CONFIRMED", "DERIVED", "TEST_BASELINE"}
 QUESTION_STATUS = {"pending", "resolved", "out_of_scope"}
 QUESTION_TYPES = {"coverage_scope", "risk_priority", "granularity", "flow_coverage", "upstream_business_gap"}
+RECOMMENDATION_STATUS = {"recommended", "not_recommended"}
 
 
 def fail(path, msg):
@@ -106,22 +107,41 @@ def validate_question(q, path, valid_evidence_refs):
         mode = q.get("answer_mode", "choice")
         if mode not in {"choice", "open"}:
             fail(f"{path}.answer_mode", "must be choice or open")
-        if mode == "choice":
-            options = q.get("options")
-            if not isinstance(options, list) or len(options) < 2:
-                fail(f"{path}.options", "choice question needs at least two options")
-            option_ids = []
-            for i, opt in enumerate(options):
-                if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
-                    fail(f"{path}.options[{i}]", "option_id and description required")
-                if not text(opt.get("impact")):
-                    fail(f"{path}.options[{i}].impact", "required")
-                option_ids.append(opt["option_id"])
-            if q.get("recommended_option") not in option_ids:
-                fail(f"{path}.recommended_option", "must reference one option")
+        rec_status = q.get("recommendation_status", "recommended")
+        if rec_status not in RECOMMENDATION_STATUS:
+            fail(f"{path}.recommendation_status", f"must be one of {sorted(RECOMMENDATION_STATUS)}")
+
+        if rec_status == "not_recommended":
+            if q.get("recommended_option") is not None:
+                fail(f"{path}.recommended_option", "must not provide recommended_option when recommendation_status is not_recommended")
+            if q.get("recommended_answer") is not None:
+                fail(f"{path}.recommended_answer", "must not provide recommended_answer when recommendation_status is not_recommended")
+            if mode == "choice":
+                options = q.get("options")
+                if not isinstance(options, list) or len(options) < 2:
+                    fail(f"{path}.options", "choice question needs at least two options")
+                for i, opt in enumerate(options):
+                    if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
+                        fail(f"{path}.options[{i}]", "option_id and description required")
+                    if not text(opt.get("impact")):
+                        fail(f"{path}.options[{i}].impact", "required")
         else:
-            if not text(q.get("recommended_answer")):
-                fail(f"{path}.recommended_answer", "required for open question")
+            if mode == "choice":
+                options = q.get("options")
+                if not isinstance(options, list) or len(options) < 2:
+                    fail(f"{path}.options", "choice question needs at least two options")
+                option_ids = []
+                for i, opt in enumerate(options):
+                    if not isinstance(opt, dict) or not text(opt.get("option_id")) or not text(opt.get("description")):
+                        fail(f"{path}.options[{i}]", "option_id and description required")
+                    if not text(opt.get("impact")):
+                        fail(f"{path}.options[{i}].impact", "required")
+                    option_ids.append(opt["option_id"])
+                if q.get("recommended_option") not in option_ids:
+                    fail(f"{path}.recommended_option", "must reference one option")
+            else:
+                if not text(q.get("recommended_answer")):
+                    fail(f"{path}.recommended_answer", "required for open question")
 
     if q["status"] == "resolved" and not text(q.get("answer")):
         fail(f"{path}.answer", "required when resolved")

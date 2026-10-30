@@ -1,0 +1,348 @@
+{
+  "schema_version": "1.1",
+  "design_version": "TP-PHASE5-SYN-01",
+  "business_model_version": "BM-PHASE5-SYN-01",
+  "design_questions": [],
+  "coverage_obligations": [
+    {
+      "coverage_id": "COV-TP-CREATE-VALID",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "Valid create accepts trimmed non-empty name",
+      "source_model_refs": [
+        "EV-CREATE-VALID"
+      ],
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ]
+    },
+    {
+      "coverage_id": "COV-TP-READ-ISOLATED",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "Read returns only the requested item",
+      "source_model_refs": [
+        "EV-READ-ISOLATED"
+      ],
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ]
+    },
+    {
+      "coverage_id": "COV-TP-CREATE-RECOVER",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "B03 reads the same item created by repaired B01 Regression",
+      "source_model_refs": [
+        "EV-CREATE-RECOVER"
+      ],
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ]
+    },
+    {
+      "coverage_id": "COV-RULE",
+      "type": "field_rule",
+      "status": "covered",
+      "description": "Valid non-empty item name rule.",
+      "source_model_refs": [
+        "RULE-NAME"
+      ],
+      "test_point_ids": [
+        "TP-CREATE-VALID",
+        "TP-CREATE-RECOVER"
+      ]
+    },
+    {
+      "coverage_id": "COV-INV",
+      "type": "invariant",
+      "status": "covered",
+      "description": "Create/read identity consistency.",
+      "source_model_refs": [
+        "INV-UNIQUE-READ"
+      ],
+      "test_point_ids": [
+        "TP-READ-ISOLATED"
+      ]
+    },
+    {
+      "coverage_id": "COV-FAIL-B01",
+      "type": "failure_atomicity",
+      "status": "covered",
+      "description": "If valid create is rejected by the fixture defect, no item is created.",
+      "source_model_refs": [
+        "EV-CREATE-VALID"
+      ],
+      "test_point_ids": [
+        "TP-CREATE-VALID"
+      ]
+    },
+    {
+      "coverage_id": "COV-READ-B03",
+      "type": "event_behavior",
+      "status": "covered",
+      "description": "B03 reads the exact deterministic item created by B01 Regression after repair.",
+      "source_model_refs": [
+        "EV-CREATE-RECOVER"
+      ],
+      "test_point_ids": [
+        "TP-CREATE-RECOVER"
+      ]
+    }
+  ],
+  "test_points": [
+    {
+      "tp_id": "TP-CREATE-VALID",
+      "title": "Valid create accepts trimmed non-empty name",
+      "priority": "P1",
+      "granularity": "atomic",
+      "module_id": "MOD-CATALOG",
+      "preconditions": [],
+      "affected_facts": [
+        "created item or read response"
+      ],
+      "must_not_change": [
+        "unrelated records"
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": [
+        "OBJ-ITEM"
+      ],
+      "business_event_ids": [
+        "EV-CREATE-VALID"
+      ],
+      "source_coverage_ids": [
+        "COV-TP-CREATE-VALID",
+        "COV-RULE",
+        "COV-FAIL-B01"
+      ],
+      "source_refs": [
+        "SRC-SYN-01"
+      ],
+      "source_status": "TEST_BASELINE",
+      "mechanism": "POST create accepts a valid business name and returns a retrievable item",
+      "core_expected": "HTTP 201 response returns id and exact normalized name",
+      "primary_coverage_id": "COV-TP-CREATE-VALID",
+      "cohesion_rationale": "The primary event behavior and its failure-atomicity assertion are two facets of this one isolated create operation."
+    },
+    {
+      "tp_id": "TP-READ-ISOLATED",
+      "title": "Read returns only the requested item",
+      "priority": "P1",
+      "granularity": "atomic",
+      "module_id": "MOD-CATALOG",
+      "preconditions": [],
+      "affected_facts": [
+        "created item or read response"
+      ],
+      "must_not_change": [
+        "unrelated records"
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": [
+        "OBJ-ITEM"
+      ],
+      "business_event_ids": [
+        "EV-READ-ISOLATED"
+      ],
+      "source_coverage_ids": [
+        "COV-TP-READ-ISOLATED",
+        "COV-INV"
+      ],
+      "source_refs": [
+        "SRC-SYN-01"
+      ],
+      "source_status": "TEST_BASELINE",
+      "mechanism": "GET by id returns the record matching that id without mutating catalog",
+      "core_expected": "HTTP 200 body id and name match the requested fixture item",
+      "primary_coverage_id": "COV-TP-READ-ISOLATED",
+      "cohesion_rationale": "The primary event behavior and its failure-atomicity assertion are two facets of this one isolated create operation."
+    },
+    {
+      "tp_id": "TP-CREATE-RECOVER",
+      "title": "B03 reads the same item created by repaired B01 Regression",
+      "priority": "P1",
+      "granularity": "atomic",
+      "module_id": "MOD-CATALOG",
+      "preconditions": [],
+      "affected_facts": [
+        "created item or read response"
+      ],
+      "must_not_change": [
+        "unrelated records"
+      ],
+      "downstream_impacts": [],
+      "business_object_ids": [
+        "OBJ-ITEM"
+      ],
+      "business_event_ids": [
+        "EV-CREATE-RECOVER"
+      ],
+      "source_coverage_ids": [
+        "COV-TP-CREATE-RECOVER",
+        "COV-RULE",
+        "COV-READ-B03"
+      ],
+      "source_refs": [
+        "SRC-SYN-01"
+      ],
+      "source_status": "TEST_BASELINE",
+      "mechanism": "GET the deterministic id created by reviewer-confirmed B01 Regression; do not create another object",
+      "core_expected": "HTTP 200 response returns id=item-phase5-b01 and name=Phase5 Item, matching B01 Regression evidence",
+      "primary_coverage_id": "COV-TP-CREATE-RECOVER",
+      "cohesion_rationale": "The primary event behavior and its failure-atomicity assertion are two facets of this one isolated create operation."
+    }
+  ],
+  "granularity_review": {
+    "status": "passed",
+    "overbroad_point_ids": [],
+    "data_instance_split_groups": []
+  },
+  "test_points_self_review": {
+    "status": "passed",
+    "coverage_accounted_for": true
+  },
+  "presentation_sync": {
+    "status": "passed",
+    "checks": {
+      "main_document_updated": true,
+      "review_document_updated": true,
+      "pending_questions_reflected": true,
+      "model_consistency_checked": true
+    }
+  },
+  "branch_design": {
+    "coverage_plan": [
+      {
+        "coverage_id": "COV-TP-CREATE-VALID",
+        "mode": "single",
+        "branch_ids": [
+          "BR-SYN-1"
+        ]
+      },
+      {
+        "coverage_id": "COV-TP-READ-ISOLATED",
+        "mode": "single",
+        "branch_ids": [
+          "BR-SYN-2"
+        ]
+      },
+      {
+        "coverage_id": "COV-TP-CREATE-RECOVER",
+        "mode": "single",
+        "branch_ids": [
+          "BR-SYN-3"
+        ]
+      }
+    ],
+    "branches": [
+      {
+        "branch_id": "BR-SYN-1",
+        "coverage_ids": [
+          "COV-TP-CREATE-VALID"
+        ],
+        "test_point_ids": [
+          "TP-CREATE-VALID"
+        ],
+        "claim_ids": [
+          "CLAIM-SYN-1"
+        ],
+        "condition": "合成条件 1",
+        "expected_result": "合成业务结果 1",
+        "evidence_basis": "合成测试源",
+        "observable_fact": "读回对象事实",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "状态",
+          "data_condition": "准备状态",
+          "oracle": "读回事实",
+          "required_variations": [
+            "条件型变体 1"
+          ]
+        }
+      },
+      {
+        "branch_id": "BR-SYN-2",
+        "coverage_ids": [
+          "COV-TP-READ-ISOLATED"
+        ],
+        "test_point_ids": [
+          "TP-READ-ISOLATED"
+        ],
+        "claim_ids": [
+          "CLAIM-SYN-2"
+        ],
+        "condition": "合成条件 2",
+        "expected_result": "合成业务结果 2",
+        "evidence_basis": "合成测试源",
+        "observable_fact": "读回对象事实",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "状态",
+          "data_condition": "准备状态",
+          "oracle": "读回事实",
+          "required_variations": [
+            "条件型变体 2"
+          ]
+        }
+      },
+      {
+        "branch_id": "BR-SYN-3",
+        "coverage_ids": [
+          "COV-TP-CREATE-RECOVER"
+        ],
+        "test_point_ids": [
+          "TP-CREATE-RECOVER"
+        ],
+        "claim_ids": [
+          "CLAIM-SYN-3"
+        ],
+        "condition": "合成条件 3",
+        "expected_result": "合成业务结果 3",
+        "evidence_basis": "合成测试源",
+        "observable_fact": "读回对象事实",
+        "certainty": "confirmed",
+        "case_handoff": {
+          "variation_axis": "状态",
+          "data_condition": "准备状态",
+          "oracle": "读回事实",
+          "required_variations": [
+            "条件型变体 3"
+          ]
+        }
+      }
+    ],
+    "claim_dispositions": [
+      {
+        "claim_id": "CLAIM-SYN-1",
+        "decision": "covered",
+        "coverage_ids": [
+          "COV-TP-CREATE-VALID"
+        ]
+      },
+      {
+        "claim_id": "CLAIM-SYN-2",
+        "decision": "covered",
+        "coverage_ids": [
+          "COV-TP-READ-ISOLATED"
+        ]
+      },
+      {
+        "claim_id": "CLAIM-SYN-3",
+        "decision": "covered",
+        "coverage_ids": [
+          "COV-TP-CREATE-RECOVER"
+        ]
+      },
+      {
+        "claim_id": "CLAIM-OLD",
+        "decision": "excluded",
+        "coverage_ids": [],
+        "reason": "按现行范围排除"
+      }
+    ],
+    "discriminator_reviews": [],
+    "path_reviews": [],
+    "retired_marker_reviews": []
+  }
+}
