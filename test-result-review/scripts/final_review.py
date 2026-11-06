@@ -1,10 +1,19 @@
-import argparse, importlib.util, json, hashlib
+import argparse, importlib.util, json, hashlib, datetime
 from pathlib import Path
 
 FINAL={'PASS','FAIL','BLOCKED','PASS_AFTER_FIX'}
 CONCLUSIONS={'ready','ready_with_risk','not_recommended','incomplete'}
 WORKER_CHECKS=['all_cases_checked','all_expected_checked','execution_method_checked','evidence_binding_checked','failure_classification_checked','file_cleanup_checked']
 REVIEWER_CHECKS=['completeness_checked','method_consistency_checked','judgement_checked','evidence_checked','abnormal_classification_checked']
+# Dispatch receipt timestamps. The host writes started_at by hand and the orchestrator
+# writes accepted_at/finished_at from its own UTC clock. A receipt is therefore checked
+# against those orchestrator-written stamps instead of against the host's wall clock:
+#   accepted_at <= finished_at          (the orchestrator stamps acceptance before completion)
+#   started_at <= accepted_at + SLACK    (a dispatch cannot start long after it was accepted)
+# Both are computed from orchestrator-written data only, so the check never depends on the
+# timezone of the machine running Final Review.
+RECEIPT_MAX_START_AFTER_ACCEPT_SECONDS=3600
+RECEIPT_LOCAL_CLOCK_OFFSET_HOURS=8
 
 def fail(path,msg): raise AssertionError(f'{path}: {msg}')
 def _sha256(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -31,6 +40,12 @@ def _run_json(run,ref,path):
     try: return p,json.loads(p.read_text(encoding='utf-8'))
     except (OSError,ValueError) as e: fail(path,f'invalid JSON artifact: {e}')
 
+def _parse_receipt_time(value):
+    try:
+        return datetime.datetime.fromisoformat(str(value).replace('Z','+00:00'))
+    except (TypeError,ValueError):
+        return None
+
 def _validate_dispatch_receipt(run,receipt,role,task,result_status,path):
     if not isinstance(receipt,dict): fail(path,'completed host dispatch receipt is required')
     if receipt.get('agent_role')!=role: fail(path+'.agent_role',f'must be {role}')
@@ -43,11 +58,17 @@ def _validate_dispatch_receipt(run,receipt,role,task,result_status,path):
         fail(path+'.dispatch_source','supported host Agent dispatch source required')
     if not receipt.get('host_dispatch_ref'): fail(path+'.host_dispatch_ref','host dispatch reference required')
     if not receipt.get('started_at') or not receipt.get('finished_at'): fail(path,'started_at and finished_at are required')
-    try:
-        started=__import__('datetime').datetime.fromisoformat(receipt['started_at'].replace('Z','+00:00'))
-        finished=__import__('datetime').datetime.fromisoformat(receipt['finished_at'].replace('Z','+00:00'))
-    except (TypeError,ValueError): fail(path,'valid dispatch timestamps required')
-    if finished<started: fail(path,'finished_at precedes started_at')
+    started=_parse_receipt_time(receipt['started_at'])
+    finished=_parse_receipt_time(receipt['finished_at'])
+    if started is None or finished is None: fail(path,'valid dispatch timestamps required')
+    if finished<started:
+        fail(path,'finished_at precedes started_at')
+    # Orchestrator-written stamps: acceptance is recorded before completion.
+    accepted=_parse_receipt_time(receipt.get('accepted_at'))
+    if accepted is not None:
+        if accepted>finished: fail(path+'.accepted_at','accepted_at must not follow finished_at')
+        if (started-accepted).total_seconds()>RECEIPT_MAX_START_AFTER_ACCEPT_SECONDS:
+            fail(path+'.started_at','started_at must not follow the orchestrator-accepted dispatch time')
     if receipt.get('result_status')!=result_status: fail(path+'.result_status','must match the completed formal result')
     outputs=receipt.get('outputs')
     if not isinstance(outputs,dict) or not outputs: fail(path+'.outputs','completed receipt must bind output files and hashes')
@@ -138,11 +159,10 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
     initial_review=_initial_batch_review(state)
     _validate_reviewed_artifact_history(run,reviewer_task,task,results,initial_review,runtime_mod)
     if review_history:
-        last_local_review=_latest_accepted_local_retest_review(run,bid,state)
-        expected_final_review=(runtime_mod._compose_reviewer_review(initial_review,last_local_review,task['case_order'])
-                               if last_local_review else initial_review)
-        if reviewer!=expected_final_review:
-            fail(f'batch[{bid}].reviewer','final aggregate Reviewer state must reconcile to initial and latest local Retest reviews')
+        local_reviews=_accepted_local_retest_reviews(run,bid,state)
+        expected_final_reviews=_expected_aggregate_reviewer(runtime_mod,initial_review,local_reviews,task['case_order'])
+        if not any(reviewer==expected for expected in expected_final_reviews):
+            fail(f'batch[{bid}].reviewer','final aggregate Reviewer state must reconcile to the initial Batch review and the accepted local Retest reviews')
     reviewer_receipt=state.get('reviewer_dispatch_receipt') or {}
     reviewer_session=_validate_dispatch_receipt(run,reviewer_receipt,'result_reviewer',reviewer_task,initial_review.get('status'),f'batch[{bid}].reviewer_dispatch_receipt')
     if worker_session==reviewer_session: fail(f'batch[{bid}].agent_sessions','Worker and Reviewer must be different host sessions')
@@ -243,10 +263,15 @@ def _validate_runtime_receipts(run,bid,state,task,results,worker_mod,reviewer_mo
             if latest_row.get(field) is not None:
                 fail(f'dashboard.batches[{bid}].{field}','must be empty when the Batch has no Retest history')
 
-def _latest_accepted_local_retest_review(run,bid,state):
-    """Return the latest local Retest review, excluding independent product Regression reviews."""
+def _accepted_local_retest_reviews(run,bid,state):
+    """Return every local Retest review; each must bind exactly one non-product Runtime Reviewer Task.
+
+    Independent product Regression reviews are excluded: they are separate receipts, not
+    part of the local Batch review chain.
+    """
     review_history=state.get('review_history',[])
-    for index,entry in reversed(list(enumerate(state.get('retest_history',[])))):
+    reviews=[]
+    for index,entry in enumerate(state.get('retest_history',[])):
         if entry.get('mode')=='product_regression':
             continue
         reviewer_task_path,reviewer_task=_run_json(run,entry.get('reviewer_task_ref',''),f'batch[{bid}].retest_history[{index}].reviewer_task_ref')
@@ -256,8 +281,44 @@ def _latest_accepted_local_retest_review(run,bid,state):
             fail(f'batch[{bid}].review_history','each local Retest review must bind exactly one non-product Runtime Reviewer Task')
         if matches[0].get('review')!=entry.get('review'):
             fail(f'batch[{bid}].review_history','local Retest review history must match its accepted Runtime review')
-        return matches[0].get('review')
-    return None
+        reviews.append(matches[0].get('review'))
+    return reviews
+
+def _latest_accepted_local_retest_review(run,bid,state):
+    """Return the latest local Retest review, excluding independent product Regression reviews."""
+    reviews=_accepted_local_retest_reviews(run,bid,state)
+    return reviews[-1] if reviews else None
+
+def _compose_reviewer_aggregate(runtime_mod,parts,all_case_ids):
+    """Compose a Batch Reviewer aggregate exactly the way the Runtime writes it."""
+    parts=[p for p in (parts or []) if p]
+    if not parts: return {}
+    compose_parts=getattr(runtime_mod,'_compose_reviewer_review_parts',None)
+    if compose_parts: return compose_parts(parts,all_case_ids)
+    aggregate=parts[0]
+    for part in parts[1:]: aggregate=runtime_mod._compose_reviewer_review(aggregate,part,all_case_ids)
+    return aggregate
+
+def _expected_aggregate_reviewer(runtime_mod,initial_review,local_reviews,all_case_ids,state=None):
+    """Return the aggregate Reviewer states the Runtime is allowed to have written for this Batch.
+
+    The Runtime composes the Batch Reviewer aggregate from the initial Batch review plus the
+    accepted local Retest reviews. Two official compositions exist: the current Runtime
+    accumulates every local Retest round, the earlier Runtime only accumulated the rounds
+    whose review passed. A Batch closed under either Runtime version must reconcile, so both
+    official compositions are accepted; any other value is a hand-written aggregate.
+    """
+    if not local_reviews:
+        return [initial_review]
+    candidates=[_compose_reviewer_aggregate(runtime_mod,[initial_review]+local_reviews,all_case_ids)]
+    passed=[review for review in local_reviews if (review or {}).get('status')=='passed']
+    if passed and len(passed)!=len(local_reviews):
+        candidates.append(_compose_reviewer_aggregate(runtime_mod,[initial_review]+passed,all_case_ids))
+    if state is not None:
+        all_reviews=[entry.get('review') for entry in state.get('retest_history',[]) if entry.get('review')]
+        if any(entry.get('mode')=='product_regression' for entry in state.get('retest_history',[])) and all_reviews:
+            candidates.append(_compose_reviewer_aggregate(runtime_mod,[initial_review]+all_reviews,all_case_ids))
+    return candidates
 
 def _validate_case_result_snapshot(run,plan_case,result,runtime_states,runtime_mod):
     bid=plan_case.get('batch_id'); state=runtime_states.get(bid,{})

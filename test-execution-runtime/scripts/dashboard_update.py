@@ -145,6 +145,9 @@ def apply_event(d,event):
         elif event.get('status')=='rework_required': update_batch(d,bid,status='needs_rework')
     elif typ=='batch_completed':
         update_batch(d,bid,status='completed'); d['current_case']=None; d['current_worker']=None; d['current_reviewer']=None
+    elif typ=='freeze_integrity_retest_opened':
+        update_batch(d,bid,status='needs_rework'); d['current_case']=None; d['current_worker']=None; d['current_reviewer']=None
+        d['freeze_integrity_stale_case_ids']=list(event.get('stale_case_ids') or [])
     elif typ=='bug_submitted':
         ref=event.get('bug_ref')
         if not ref or not str(ref).strip():
@@ -343,6 +346,7 @@ def _next_action(event):
             return {'type':'handle_defects','batch_id':bid,'case_ids':event.get('unhandled_fail_case_ids',[])}
         return {'type':'execute_next_batch'}
     if typ=='batch_completed': return {'type':'execute_next_batch'}
+    if typ=='freeze_integrity_retest_opened': return {'type':'execute_retest','batch_id':bid,'case_ids':event.get('stale_case_ids',[])}
     if typ=='bug_submitted': return {'type':'wait_bug_fix','bug_ref':event.get('bug_ref')}
     if typ=='defect_submission_failed': return {'type':'handle_defects','defect_id':event.get('defect_id')}
     if typ=='bug_fixed_pending_regression': return {'type':'execute_regression','bug_ref':event.get('bug_ref')}

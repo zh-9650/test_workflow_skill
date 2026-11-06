@@ -169,6 +169,7 @@ def _result_artifact_refs(result):
     append_refs(result.get('evidence_refs'))
     append_refs(result.get('precondition_evidence_refs'))
     for attempt in run.get('debug_attempts',[]) or []:
+        if not isinstance(attempt,dict): continue
         refs.extend(value for key,value in attempt.items() if key.endswith('_ref') and isinstance(value,str))
         append_refs(attempt.get('evidence_refs'))
     for invocation in result.get('jev_invocations',[]) or []:
@@ -460,6 +461,44 @@ def _compose_reviewer_review(original,retest,all_case_ids):
     rounds=_as_review_list(retest)
     checks={k: bool((original or {}).get('checks',{}).get(k)) and bool(rounds) and all(bool((r or {}).get('checks',{}).get(k)) for r in rounds) for k in ['completeness_checked','method_consistency_checked','judgement_checked','evidence_checked','abnormal_classification_checked']}
     return {'schema_version':EXECUTION_SCHEMA_VERSION,'status':'passed','checked_case_ids':list(all_case_ids),'checks':checks,'findings':_merge_findings(original,*rounds),'retest_case_ids':[],'return_stage':None,'composed_from':['initial_batch_review','local_retest_review']}
+
+def _compose_worker_review_parts(parts,all_case_ids):
+    parts=[p for p in (parts or []) if p]
+    checks={k: all(bool((p or {}).get('checks',{}).get(k)) for p in parts) for k in ['all_cases_checked','all_expected_checked','execution_method_checked','evidence_binding_checked','failure_classification_checked','file_cleanup_checked']}
+    return {'status':'passed','checked_case_ids':list(all_case_ids),'checks':checks,'findings':_merge_findings(*parts),'composed_from':['initial_batch_self_review','local_retest_self_review']}
+
+def _compose_reviewer_review_parts(parts,all_case_ids):
+    parts=[p for p in (parts or []) if p]
+    checks={k: all(bool((p or {}).get('checks',{}).get(k)) for p in parts) for k in ['completeness_checked','method_consistency_checked','judgement_checked','evidence_checked','abnormal_classification_checked']}
+    return {'schema_version':EXECUTION_SCHEMA_VERSION,'status':'passed','checked_case_ids':list(all_case_ids),'checks':checks,'findings':_merge_findings(*parts),'retest_case_ids':[],'return_stage':None,'composed_from':['initial_batch_review','local_retest_review']}
+
+def _accumulated_results(base,state,current_results=None):
+    """Per SKILL.md section 15: every Case keeps its latest result; only retested Cases are replaced."""
+    baseline_ref=state.get('final_results_ref') or state.get('worker_results_ref')
+    by={}
+    if baseline_ref and (_Path(base)/baseline_ref).exists():
+        for r in _read_json(_Path(base)/baseline_ref): by[r['case_id']]=r
+    for record in state.get('retest_history',[]):
+        if record.get('mode')=='product_regression': continue
+        ref=record.get('results_ref')
+        if not ref or not (_Path(base)/ref).exists(): continue
+        for r in _read_json(_Path(base)/ref): by[r['case_id']]=r
+    for r in (current_results or []): by[r['case_id']]=r
+    return by
+
+def _stale_script_cases(base,results_by_case):
+    """Cases whose recorded script_sha256 no longer matches the frozen script bytes on disk."""
+    stale=[]
+    for cid,r in (results_by_case or {}).items():
+        run=r.get('automation_run') or {}; ref=run.get('script_ref'); recorded=run.get('script_sha256')
+        if not ref or not recorded: continue
+        path=_Path(base)/ref
+        if not path.exists() or _sha256(path)!=recorded: stale.append(cid)
+    return sorted(stale)
+
+def _next_retest_case_ids(base,baseline_results,requested):
+    """The next rework round covers the Reviewer-requested Cases plus every byte-stale Case."""
+    return sorted(set(requested or [])|set(_stale_script_cases(base,baseline_results)))
 
 def _dashboard_module(): return _load_module(Path(__file__).with_name('dashboard_update.py'),'runtime_dashboard_update')
 def _dashboard_shell_module(): return _load_module(Path(__file__).with_name('dashboard.py'),'runtime_dashboard_shell')
@@ -1035,6 +1074,7 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
     worker_session=(ar.get('worker_dispatch_receipt') or {}).get('agent_session_id'); reviewer_receipt=ar.get('reviewer_dispatch_receipt') or {}; reviewer_session=reviewer_receipt.get('agent_session_id')
     validate_reviewer(review,task['case_order'],retest_results,reviewer_task=reviewer_task,worker_session_id=worker_session,reviewer_session_id=reviewer_session,results_sha256=reviewer_task['results_sha256']); ar['reviewer']=review; reviewer_id=reviewer_session; _emit_dashboard(base,{'type':'review_started','batch_id':batch_id,'reviewer_id':reviewer_id,'retest':True})
     unhandled_fail_case_ids=[]
+    freeze_stale=[]
     reviewer_output_ref=_run_relative_ref(base,review_path)
     reviewer_receipt=deepcopy(reviewer_receipt); reviewer_receipt.update({'finished_at':datetime.now(timezone.utc).isoformat(),'receipt_status':'completed','result_status':review['status'],'outputs':{reviewer_output_ref:_sha256(review_path)}})
     ar['reviewer_dispatch_receipt']=reviewer_receipt
@@ -1056,6 +1096,7 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
             original=_read_json(base/current_ref); by={r['case_id']:r for r in original}
             for r in retest_results: by[r['case_id']]=r
             merged=[by[c] for c in task0['case_order']]
+            stale=[]
         else:
             cum_by,pending=_merge_retest_rounds(_read_json(base/state['retest_cumulative_ref']),[],task0['case_order'])
             merged=[cum_by[c] for c in task0['case_order']]
@@ -1063,36 +1104,52 @@ def accept_retest_reviewer_files(run_dir,batch_id,review_path):
             # A BLOCKED resume commits the resumed rows alone, so an unjudged Case outside the
             # resume scope must not stall that path (the final review still rejects it).
             if not resume_mode: _require_retest_merge_closed(pending,batch_id,ar['sequence'])
-        if not resume_mode and not product_regression: _validate_result_set(task0,merged,'merged_retest_results',base)
-        initial_worker=deepcopy(state.get('worker_self_review') or {})
-        initial_reviewer=deepcopy(state.get('reviewer') or {})
-        if product_regression:
-            prior=[entry for entry in state.get('retest_history',[]) if entry.get('mode')=='product_regression' and entry.get('regression_id')==ar.get('regression_id')]
-            aggregate={}
-            for attempt in prior+[retest_record]:
-                for result in _read_json(base/attempt['results_ref']): aggregate[result['case_id']]=deepcopy(result)
-            aggregate_ref=f'internal/execution/results/{batch_id}-{ar.get("regression_id")}-final-regression-results.json'
-            _write_json(base/aggregate_ref,[aggregate[cid] for cid in aggregate])
-            state['product_regression_results_ref']=aggregate_ref
+            stale=[] if resume_mode else _stale_script_cases(base,cum_by)
+        if stale:
+            seq=len(state.get('retest_tasks',[]))+1
+            rt=build_retest(task0,stale,seq,cum_by)
+            rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt)
+            state.setdefault('retest_tasks',[]).append(str(rp.relative_to(base)))
+            state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_worker':None,'current_case':None,'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),'freeze_integrity_stale_case_ids':stale}
+            state['status']='needs_rework'; freeze_stale=stale
         else:
-            rounds=state.get('retest_history',[])
-            aggregate_worker=_compose_worker_review(initial_worker,[r.get('worker_self_review') for r in rounds if r.get('worker_self_review')],task0['case_order'])
-            aggregate_reviewer=_compose_reviewer_review(initial_reviewer,[r.get('review') for r in rounds if r.get('review')],task0['case_order'])
-            merged_ref=f'internal/execution/results/{batch_id}-merged-after-retest-{ar["sequence"]:03d}.json'
-            _write_json(base/merged_ref,merged); state['final_results_ref']=merged_ref
-            state['worker_self_review']=aggregate_worker; state['reviewer']=aggregate_reviewer
-        state['status']='completed'; state['active_retest']=None
-        if resume_mode: _commit_results_to_ledger(base,task,retest_results,'unblocked_cases_reviewer_passed')
-        elif not product_regression:
-            _commit_results_to_ledger(base,task0,merged,'retest_reviewer_passed')
-            _emit_preparation_recovery_verified(base,task0,merged)
-        unhandled_fail_case_ids=_unhandled_fail_case_ids(base,retest_results if product_regression else merged)
+            if not resume_mode and not product_regression: _validate_result_set(task0,merged,'merged_retest_results',base)
+            initial_worker=deepcopy(state.get('worker_self_review') or {})
+            initial_reviewer=deepcopy(state.get('reviewer') or {})
+            if product_regression:
+                prior=[entry for entry in state.get('retest_history',[]) if entry.get('mode')=='product_regression' and entry.get('regression_id')==ar.get('regression_id')]
+                aggregate={}
+                for attempt in prior+[retest_record]:
+                    for result in _read_json(base/attempt['results_ref']): aggregate[result['case_id']]=deepcopy(result)
+                aggregate_ref=f'internal/execution/results/{batch_id}-{ar.get("regression_id")}-final-regression-results.json'
+                _write_json(base/aggregate_ref,[aggregate[cid] for cid in aggregate])
+                state['product_regression_results_ref']=aggregate_ref
+            else:
+                rounds=state.get('retest_history',[])
+                aggregate_worker=_compose_worker_review(initial_worker,[r.get('worker_self_review') for r in rounds if r.get('worker_self_review')],task0['case_order'])
+                aggregate_reviewer=_compose_reviewer_review(initial_reviewer,[r.get('review') for r in rounds if r.get('review')],task0['case_order'])
+                merged_ref=f'internal/execution/results/{batch_id}-merged-after-retest-{ar["sequence"]:03d}.json'
+                _write_json(base/merged_ref,merged); state['final_results_ref']=merged_ref
+                state['worker_self_review']=aggregate_worker; state['reviewer']=aggregate_reviewer
+            state['status']='completed'; state['active_retest']=None
+            if resume_mode: _commit_results_to_ledger(base,task,retest_results,'unblocked_cases_reviewer_passed')
+            elif not product_regression:
+                _commit_results_to_ledger(base,task0,merged,'retest_reviewer_passed')
+                _emit_preparation_recovery_verified(base,task0,merged)
+            unhandled_fail_case_ids=_unhandled_fail_case_ids(base,retest_results if product_regression else merged)
     elif review['status']=='return_upstream': state['status']='return_upstream'; state['return_stage']=review['return_stage']
     else:
-        seq=len(state.get('retest_tasks',[]))+1; baseline_ref=(None if product_regression else state.get('retest_cumulative_ref')) or state.get('final_results_ref') or state.get('product_regression_results_ref') or state['worker_results_ref']; rt=build_retest(_read_task(base,state['task_ref']),review['retest_case_ids'],seq,_read_json(base/baseline_ref))
+        seq=len(state.get('retest_tasks',[]))+1; baseline_ref=(None if product_regression else state.get('retest_cumulative_ref')) or state.get('final_results_ref') or state.get('product_regression_results_ref') or state['worker_results_ref']
+        baseline_rows=_read_json(base/baseline_ref)
+        baseline_map={r['case_id']:r for r in baseline_rows} if isinstance(baseline_rows,list) else dict(baseline_rows or {})
+        wanted=list(review.get('retest_case_ids') or []) if product_regression else _next_retest_case_ids(base,baseline_map,review.get('retest_case_ids'))
+        rt=build_retest(_read_task(base,state['task_ref']),wanted,seq,baseline_rows)
         if ar.get('mode')=='product_regression': rt.update({'operation_mode':'product_regression','regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),**deployment_fields}); __import__('batch_task_builder').seal_task(rt); validate_task(rt)
         rp=base/f'internal/execution/tasks/{batch_id}-retest-{seq:03d}.json'; _write_json(rp,rt); state['retest_tasks'].append(str(rp.relative_to(base))); state['active_retest']={'task_ref':str(rp.relative_to(base)),'sequence':seq,'results_ref':None,'self_review_ref':None,'self_review':None,'reviewer_task_ref':None,'worker_dispatch_receipt':None,'reviewer_dispatch_receipt':None,'reviewer':None,'partial_case_results':{},'current_worker':None,'current_case':None,'mode':ar.get('mode'),'regression_id':ar.get('regression_id'),'bug_ref':ar.get('bug_ref'),**deployment_fields}; state['status']='needs_rework'
-    _write_json(sp,state); _emit_dashboard(base,{'type':'review_finished','batch_id':batch_id,'reviewer_id':reviewer_id,'reviewer_receipt_status':'completed','reviewer_result_status':review['status'],'status':review['status'],'retest_case_ids':review.get('retest_case_ids',[]),'return_stage':review.get('return_stage'),'unhandled_fail_case_ids':unhandled_fail_case_ids,'retest':True}); return state
+    _write_json(sp,state); _emit_dashboard(base,{'type':'review_finished','batch_id':batch_id,'reviewer_id':reviewer_id,'reviewer_receipt_status':'completed','reviewer_result_status':review['status'],'status':review['status'],'retest_case_ids':review.get('retest_case_ids',[]),'return_stage':review.get('return_stage'),'unhandled_fail_case_ids':unhandled_fail_case_ids,'retest':True})
+    if freeze_stale:
+        _emit_dashboard(base,{'type':'freeze_integrity_retest_opened','batch_id':batch_id,'current_action':'execute_retest','stale_case_ids':freeze_stale,'retest_sequence':state['active_retest']['sequence']})
+    return state
 
 def _cli():
     a=_argparse.ArgumentParser(); sp=a.add_subparsers(dest='cmd',required=True)
